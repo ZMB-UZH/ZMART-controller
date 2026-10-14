@@ -1,0 +1,12 @@
+__pycache__/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Files the tutorial notebooks in docs/ create when you run them.
+docs/*/images/
+docs/*/pretend_scope/
+docs/*/pretend_scope_images/
+docs/*/my_settings.json

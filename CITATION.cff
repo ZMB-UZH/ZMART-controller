@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use the ZMART Controller in your work, please cite it as below."
+title: "ZMART Controller"
+abstract: "A small, universal schema for driving a microscope from Python, part of ZMART, the Microscopy-Agnostic Research Toolkit of the Center for Microscopy and Image Analysis (ZMB), University of Zurich."
+type: software
+version: 0.3.0
+date-released: 2026-10-14
+license: MIT
+repository-code: "https://github.com/thomdehoog/ZMART-controller"
+url: "https://github.com/thomdehoog/ZMART-microscopy"
+authors:
+  - family-names: "de Hoog"
+    given-names: "Thom"
+    email: "thom.dehoog@zmb.uzh.ch"
+    affiliation: "Center for Microscopy and Image Analysis (ZMB), University of Zurich"
+keywords:
+  - microscopy
+  - smart microscopy
+  - microscope control

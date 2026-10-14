@@ -1,0 +1,8 @@
+# Keep the GitHub Actions used by the tests workflow up to date. Dependabot
+# opens a pull request when a newer version of an action is released.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"

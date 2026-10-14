@@ -1,0 +1,86 @@
+# The checks that run on every push and pull request, on Linux and Windows.
+#
+# Everything runs on the mock driver, zmart_controller.mock, so no microscope
+# is needed. There are two jobs:
+#
+#   tests    the controller's and the mock driver's tests, the two tutorial
+#            notebooks in docs/ run from start to end, and a style check
+#   package  the package is built, checked, installed into an empty
+#            environment and used once, the way a new user would
+#
+# The built package is kept with the run for 14 days, so a release can be
+# taken from a green run instead of from someone's laptop.
+name: tests
+
+on:
+  push:
+    branches: [main, release-candidate]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tests:
+    name: ${{ matrix.os }} / Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install the controller and the test tools
+        run: python -m pip install -e ".[test]" ruff
+      - name: The tests
+        run: python -m pytest
+      - name: The tutorial notebooks, run from start to end
+        # The "plug in a driver" tutorial registers a driver on the computer it
+        # runs on. Point that at a scratch folder so the runner's own list of
+        # drivers is never touched.
+        env:
+          ZMART_MICROSCOPY_ROOT: ${{ runner.temp }}/zmart-microscopy
+        run: python -m pytest --nbmake -p no:cacheprovider docs/
+      - name: Style
+        run: |
+          python -m ruff check .
+          python -m ruff format --check .
+
+  package:
+    name: package builds and installs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Build the package
+        run: |
+          python -m pip install build twine
+          python -m build
+          python -m twine check dist/*
+      - name: Install the wheel into an empty environment and use it once
+        # A fresh environment, not the checkout: this catches a file that is
+        # in the repository but missing from the wheel, such as a driver's
+        # settings file, which an editable install would never notice.
+        run: |
+          python -m venv "$RUNNER_TEMP/fresh"
+          "$RUNNER_TEMP/fresh/bin/python" -m pip install dist/*.whl
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/fresh/bin/python" -c "
+          import zmart_controller.mock
+          from zmart_controller import mic
+          mic.connect(zmart_controller.mock, {'output_root': 'mock-images'})
+          assert mic.get_info()['success']
+          assert mic.get_xyz()['success']
+          assert mic.acquire(position_label='A1')['success']
+          mic.disconnect()
+          print('the installed package works')
+          "
+      - uses: actions/upload-artifact@v7
+        with:
+          name: zmart-controller-dist
+          path: dist/
+          retention-days: 14
