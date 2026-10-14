@@ -22,9 +22,9 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/thomdehoog/ZMART-controller"
-Repository = "https://github.com/thomdehoog/ZMART-controller"
-Issues = "https://github.com/thomdehoog/ZMART-controller/issues"
+Homepage = "https://github.com/ZMB-UZH/ZMART-controller"
+Repository = "https://github.com/ZMB-UZH/ZMART-controller"
+Issues = "https://github.com/ZMB-UZH/ZMART-controller/issues"
 "ZMART microscopy" = "https://github.com/thomdehoog/ZMART-microscopy"
 
 [project.optional-dependencies]

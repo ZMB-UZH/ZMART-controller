@@ -94,14 +94,14 @@ mic.disconnect()
 Install the controller into your Python environment (Python 3.11 or newer; it needs nothing else):
 
 ```bash
-pip install "git+https://github.com/thomdehoog/ZMART-controller"
+pip install "git+https://github.com/ZMB-UZH/ZMART-controller"
 ```
 
 To use it in a project of your own, add it to the project's dependencies, for example in its
 `pyproject.toml`:
 
 ```toml
-dependencies = ["zmart-controller @ git+https://github.com/thomdehoog/ZMART-controller"]
+dependencies = ["zmart-controller @ git+https://github.com/ZMB-UZH/ZMART-controller"]
 ```
 
 ## Related standards for interoperability
@@ -118,8 +118,8 @@ speaks the controller's commands, and the Stellaris driver turns them into actio
 However, the mock driver, `zmart_controller.mock`, lets you try everything without a microscope.
 
 ## Author
-Thom de Hoog, Center for Microscopy and Image Analysis (ZMB), University of
-Zurich (thom.dehoog@zmb.uzh.ch, thomdehoog@gmail.com).
+Thom de Hoog, Center for Microscopy and Image Analysis (ZMB), University of Zurich.
+Questions and problems: please open an [issue](https://github.com/ZMB-UZH/ZMART-controller/issues).
 
 ## License
 MIT License. See LICENSE file for details.

@@ -321,7 +321,7 @@ mic.disconnect()
 ---
 
 MIT license. Thom de Hoog, Center for Microscopy and Image Analysis (ZMB),
-University of Zurich. thom.dehoog@zmb.uzh.ch, thomdehoog@gmail.com.
+University of Zurich.
 
 If the code in this repository inspires you, or you use it or build on it, please acknowledge it.
 The [CITATION.cff](../../CITATION.cff) file says how to cite it.
