@@ -39,8 +39,11 @@ def write_ome_zarr(
 ) -> None:
     """Write ``planes`` as one OME-Zarr image with axes z, y and x.
 
-    ``position_um`` is the user position of the first plane's corner pixel;
-    it becomes the image's translation, so viewers place it correctly.
+    ``position_um`` is the user position of the centre of the first voxel,
+    the lowest plane's first pixel. It becomes the image's translation: the
+    format places a voxel's centre at ``index * scale + translation``
+    (OME-NGFF RFC-5, "the pixel/voxel center is the origin of the continuous
+    coordinate system"), so viewers place the image where it was taken.
     """
     path.mkdir(parents=True)
     axes = [{"name": axis, "type": "space", "unit": "micrometer"} for axis in ("z", "y", "x")]

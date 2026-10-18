@@ -133,7 +133,9 @@ class ZmartDriver:
         path of every file saved. ``planes``
         has one entry per saved image plane: its ``path``, its ``c``, ``z``
         and ``t`` counted from 0, and ``x_um``, ``y_um``, ``z_um``, the
-        stage position it was taken at. Raise ``ValueError`` for an
+        stage position it was taken at: x and y are the centre of the field
+        of view. A store you write (OME-Zarr) is placed by the centre of its
+        first voxel. Raise ``ValueError`` for an
         acquisition setting that is not listed. When no complete file ever
         appears, return ``False`` and say so.
         """

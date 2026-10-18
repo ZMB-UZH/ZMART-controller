@@ -79,10 +79,19 @@ def save_acquisition(
     planes, width, height = align_to_stage(
         planes, header["width"], header["height"], registration["orientation"]
     )
-    # The position is the centre of the picture; OME stores the corner pixel.
+    # The position is the centre of the picture. OME-Zarr places a store by
+    # the centre of its first voxel (RFC-5: the voxel centre is the origin of
+    # the coordinates), half a pixel in from the corner. The OME-TIFF plane
+    # keeps the corner as PositionX/Y: half a frame from the centre that the
+    # answer reports, and nothing in ZMART reads it.
     corner = {
         "x": position_um["x"] - (width / 2) * pixel_size,
         "y": position_um["y"] - (height / 2) * pixel_size,
+        "z": position_um["z"],
+    }
+    first_voxel = {
+        "x": corner["x"] + pixel_size / 2,
+        "y": corner["y"] + pixel_size / 2,
         "z": position_um["z"],
     }
     extra = {
@@ -107,7 +116,7 @@ def save_acquisition(
             name=stem,
             pixel_size_um=pixel_size,
             z_step_um=float(header["z_step_um"]),
-            position_um=corner,
+            position_um=first_voxel,
             extra=extra,
         )
         files.append(str(target))

@@ -28,6 +28,7 @@ from zmart_controller.mock.error_handling import RULES, Kind, classify
 from zmart_controller.mock.get_actions import DEFAULT_GET_TUNING
 from zmart_controller.mock.set_actions import DEFAULT_SET_TUNING, Gate
 from zmart_controller.mock.testing.mock_api import read_mraw
+from zmart_controller.mock.testing.mock_api.sample import BACKGROUND, _spot_in_cell
 from zmart_controller.mock.vendor_interface import VendorError
 
 PACKAGE = Path(zmart_controller.mock.__file__).resolve().parent
@@ -286,6 +287,29 @@ def _tiff_description(path: Path) -> str:
     raise AssertionError("no image description")
 
 
+def _centroid(pixels, width: int, *, around: tuple[float, float], reach: int = 4):
+    """Where a spot's light is centred, in pixel indices (row, column).
+
+    The brightest pixel within ``reach`` of ``around`` finds the spot; the
+    centre is then the light above the background, weighted over ``reach``
+    pixels round it, which a spot of the mock (about 1.2 pixels wide) fills.
+    """
+    near = [
+        (r, c)
+        for r in range(round(around[0]) - reach, round(around[0]) + reach + 1)
+        for c in range(round(around[1]) - reach, round(around[1]) + reach + 1)
+    ]
+    top_r, top_c = max(near, key=lambda rc: pixels[rc[0] * width + rc[1]])
+    total = row = col = 0.0
+    for r in range(top_r - reach, top_r + reach + 1):
+        for c in range(top_c - reach, top_c + reach + 1):
+            light = max(0.0, pixels[r * width + c] - BACKGROUND)
+            total += light
+            row += r * light
+            col += c * light
+    return row / total, col / total
+
+
 class TestDataHandling:
     def test_the_stack_is_state_and_the_full_trigger_takes_it(self, mic):
         mic.set_state({"changeable": {"z_planes": 3, "z_step_um": 2.0}})
@@ -427,6 +451,44 @@ class TestDataHandling:
                     assert abs(second[row * width + col] - first[row * width + col + 5]) <= 1
         finally:
             session.disconnect()
+
+    def test_a_spot_lies_in_the_store_where_it_lies_on_the_sample(self, tmp_path):
+        # OME-Zarr places the centre of a voxel at index * scale + translation
+        # (RFC-5: the voxel centre is the origin), so a spot of the pretend
+        # sample must be found there, in the frame set_xyz takes, within a
+        # tenth of a pixel. The stage stands off the spot by a fraction of a
+        # pixel, so a store placed by its corner would miss by half a pixel.
+        session = _open(tmp_path, mock_timing="instant")
+        truth = session._handle.scope.truth()
+        session.disconnect()
+        save(
+            "image_stage_registration",
+            {
+                "orientation": [list(r) for r in truth["orientation"]],
+                "pixel_size_um": {"1": 1.0, "2": 0.5, "3": 0.25},
+            },
+        )
+        session = _open(
+            tmp_path, mock_timing="instant", format="ome-zarr", backlash_correction=False
+        )
+        session._handle.scope._noise = False
+        try:
+            raw_x, raw_y, _ = _spot_in_cell(truth["seed"], 2500, 1876)
+            origin = session._handle.config.origin
+            spot = {"x": raw_x - origin["x"], "y": raw_y - origin["y"]}
+            session.set_xyz(spot["x"] + 6.3, spot["y"] - 4.6, 0.0)
+            answer = session.acquire(position_label="spot")["content"]
+        finally:
+            session.disconnect()
+        store = Path(answer["files"][0])
+        level = json.loads((store / "zarr.json").read_text())["attributes"]["ome"]
+        transforms = level["multiscales"][0]["datasets"][0]["coordinateTransformations"]
+        _, pixel_y, pixel_x = transforms[0]["scale"]
+        _, origin_y, origin_x = transforms[1]["translation"]
+        pixels = struct.unpack("<4096H", (store / "0" / "c" / "0" / "0" / "0").read_bytes())
+        row, col = _centroid(pixels, 64, around=(32 + 4.6, 32 - 6.3))
+        assert abs(col * pixel_x + origin_x - spot["x"]) < 0.1 * pixel_x
+        assert abs(row * pixel_y + origin_y - spot["y"]) < 0.1 * pixel_y
 
     def test_an_unconfirmed_acquisition_lists_no_files(self, mic):
         mic._handle.scope.faults.add("StartAcquisition", "ignore")

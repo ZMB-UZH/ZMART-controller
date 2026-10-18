@@ -226,7 +226,9 @@ def acquire(self, position_label, acquisition_settings):
 
 The call should return when the acquisition is done. Return every saved file and every image plane with its stage position. A workflow then finds its images in the same way on every microscope.
 
-Every plane says where on the sample it was taken, in the frame `set_xyz` takes. A z-stack the microscope makes by itself is described the same way on every microscope: `z_um` is each slice's own height, `z = 0` is the lowest slice and each depth above it is higher, whichever way the microscope moved, and the channels of one slice share its height. `check_acquire_answer` refuses an answer that does not.
+Every plane says where on the sample it was taken, in the frame `set_xyz` takes: `x_um` and `y_um` are the centre of the field of view, the stage position, never a corner of the image. A z-stack the microscope makes by itself is described the same way on every microscope: `z_um` is each slice's own height, `z = 0` is the lowest slice and each depth above it is higher, whichever way the microscope moved, and the channels of one slice share its height. `check_acquire_answer` refuses an answer that does not.
+
+A driver that saves OME-Zarr places the image by its translation, and the translation is the centre of the first voxel, as OME-NGFF RFC-5 defines it ("the pixel/voxel center is the origin of the continuous coordinate system"). For a plane taken with its field centred at `x_um`, `nx` pixels of size `p` wide, the x translation is `x_um - nx·p/2 + p/2`, and likewise for y; z is the lowest slice's own height. A coarser level made by averaging 2×2 pixels at level `l` starts at `first centre + (2^l - 1)·p/2`. An OME-TIFF's `PositionX` and `PositionY` are not part of the contract: the mock writes the corner of the frame there, which is half a frame from the centre the answer reports, and nothing in ZMART reads them.
 
 <br>
 

@@ -265,7 +265,8 @@ def check_acquire_answer(answer: Any) -> list[str]:
     which channel, depth and moment it is (``c``, ``z`` and ``t``, each
     counted from 0, which also find the plane inside a file that holds many),
     and where on the sample it was taken (``x_um``, ``y_um`` and ``z_um``, in
-    micrometres, in the frame ``set_xyz`` takes). Every file a plane names must
+    micrometres, in the frame ``set_xyz`` takes; ``x_um`` and ``y_um`` are
+    the centre of the field of view). Every file a plane names must
     be in ``files``, and no two planes may share the same channel, depth and
     moment. A driver may add entries of its own to a plane; they are not
     checked.
