@@ -136,9 +136,10 @@ class ZmartDriver:
         ``position_label`` is the workflow's name for this capture, handed on
         as it was given. ``acquisition_type`` is the kind of acquisition in
         the run, such as ``"overview"``: put it in the file names and the
-        metadata (the controller has filled in ``"acquisition"`` when the
-        workflow gave none). ``output_folder`` is the folder to save in, as
-        text, or ``None`` for the place set up on this microscope. When the
+        metadata. It is always a non-empty text: the controller has filled
+        in ``"acquisition"`` when the workflow gave none. ``output_folder``
+        is the folder to save in, always text, or ``None`` for the place set
+        up on this microscope. When the
         vendor software always saves in its own place, save there, list the
         real paths, and say so in ``get_info``; never refuse for it. Never
         overwrite an earlier file. ``files`` lists the

@@ -63,11 +63,7 @@ from zmart_controller.mock.get_actions import GetDispatcher
 from zmart_controller.mock.procedures import PROCEDURES
 from zmart_controller.mock.set_actions import Gate, SetDispatcher
 from zmart_controller.mock.vendor_interface import NAME_LIMIT, MockScopeConnection
-from zmart_controller.zmart_controller import (
-    UNIT,
-    acquisition_type_or_default,
-    output_folder_as_text,
-)
+from zmart_controller.zmart_controller import UNIT
 
 logger = logging.getLogger("zmart_controller.mock")
 
@@ -500,16 +496,17 @@ def acquire(
     handle: MockHandle,
     *,
     position_label: str,
-    acquisition_settings: dict | None = None,
-    acquisition_type: str | None = None,
-    output_folder: str | None = None,
+    acquisition_settings: dict | None,
+    acquisition_type: str,
+    output_folder: str | None,
 ) -> dict:
     """Capture an image (or the stored stack) here and save it, in one step.
 
     Every file name is ``acquisition_type``, then ``position_label``; the
-    type, ``"acquisition"`` when none is given, is also in each file's
-    metadata and in the answer. The files go in ``output_folder``, or else
-    under the connection's ``output_root``. The ``trigger`` decides
+    type is also in each file's metadata and in the answer. The controller
+    hands it in filled in (``"acquisition"`` when the workflow gave none).
+    The files go in ``output_folder``, or else, when it is None, under the
+    connection's ``output_root``. The ``trigger`` decides
     what is taken: ``snap``, one plane with the settings as they are, or
     ``full``, the whole stack stored in the state. How the files are saved and
     whether the stage settles first were set at connect. The content lists
@@ -520,8 +517,7 @@ def acquire(
     confirmed, ``success`` is False and no files or planes are listed.
     """
     _require_open(handle)
-    acquisition_type = acquisition_type_or_default(acquisition_type)
-    folder = Path(output_folder_as_text(output_folder) or handle.output_root)
+    folder = Path(output_folder) if output_folder is not None else Path(handle.output_root)
     settings = _with_defaults(acquisition_settings)
     stack = handle.stack if settings["trigger"] == "full" else {"z_planes": 1, "z_step_um": 1.0}
     mark = handle.log.mark()

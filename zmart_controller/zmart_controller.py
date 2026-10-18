@@ -67,6 +67,7 @@ class ZmartController:
         # functions answer directly, so they stand in for the methods below.
         functions = driver_functions(driver)
         self._handle = functions.pop("connect")(connection)
+        functions["acquire"] = filling_in_acquire(functions["acquire"])
         for command, function in functions.items():
             setattr(self, command, _answering(partial(function, self._handle)))
 
@@ -313,8 +314,7 @@ def acquisition_type_or_default(acquisition_type: str | None) -> str:
 
     Every driver receives a word, so the kind is named the same way in every
     file and answer. Raises ``ValueError`` for anything but a word, before the
-    driver is asked anything. A driver that is a module, whose functions the
-    workflow calls directly, uses this too.
+    driver is asked anything.
     """
     if acquisition_type is None:
         return DEFAULT_ACQUISITION_TYPE
@@ -336,6 +336,34 @@ def output_folder_as_text(output_folder: str | PathLike | None) -> str | None:
     if not isinstance(output_folder, (str, PathLike)) or not str(output_folder).strip():
         raise ValueError(f"output_folder must be a folder's path, not {output_folder!r}")
     return str(output_folder)
+
+
+def filling_in_acquire(acquire):
+    """A module driver's ``acquire``, given what the controller fills in for every driver.
+
+    A driver that is a module answers for itself, so the controller cannot
+    build its answer; it still fills in its parameters, as ``ZmartController.acquire``
+    does for a ``ZmartDriver``: every driver receives a non-empty
+    ``acquisition_type`` and ``output_folder`` as text or None, and never
+    applies a default of its own.
+    """
+
+    def filled_in(
+        handle,
+        position_label,
+        acquisition_settings=None,
+        acquisition_type=None,
+        output_folder=None,
+    ):
+        return acquire(
+            handle,
+            position_label=position_label,
+            acquisition_settings=acquisition_settings,
+            acquisition_type=acquisition_type_or_default(acquisition_type),
+            output_folder=output_folder_as_text(output_folder),
+        )
+
+    return filled_in
 
 
 def _xyz_content(result, chosen: dict[str, str]) -> dict:

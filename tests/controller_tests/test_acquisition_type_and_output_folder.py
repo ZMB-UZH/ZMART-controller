@@ -268,3 +268,51 @@ def test_the_mock_names_the_default_type_when_none_is_given(tmp_path):
 
     assert content["acquisition_type"] == "acquisition"
     assert Path(content["files"][0]).name == "acquisition_A1.ome.tif"
+
+
+# ---- a driver that is a module receives the same: the controller fills in for it too
+
+
+def _module_driver(asked):
+    """A driver made of functions, like the mock, that remembers what acquire was given."""
+    from types import SimpleNamespace
+
+    def acquire(handle, *, position_label, acquisition_settings, acquisition_type, output_folder):
+        asked.append((position_label, acquisition_settings, acquisition_type, output_folder))
+        return {"success": True, "content": {"position_label": position_label}}
+
+    def answer(*args, **kwargs):
+        return {"success": True, "content": {}}
+
+    commands = {name: answer for name in ("get_info", "get_actuators", "get_xyz", "set_xyz")}
+    commands.update(
+        {name: answer for name in ("get_state", "set_state", "get_acquisition_settings")}
+    )
+    commands.update({name: answer for name in ("get_procedures", "run_procedure")})
+    return SimpleNamespace(
+        __name__="module-scope", connect=lambda connection: object(), acquire=acquire, **commands
+    )
+
+
+def test_a_module_driver_receives_the_default_type_and_the_folder_as_text(tmp_path):
+    asked = []
+    session = ZmartController(_module_driver(asked), {})
+
+    session.acquire("A1")
+    session.acquire(position_label="B2", acquisition_type="overview", output_folder=tmp_path)
+
+    assert asked == [
+        ("A1", None, "acquisition", None),
+        ("B2", None, "overview", str(tmp_path)),
+    ]
+
+
+def test_a_module_driver_is_never_asked_with_a_type_that_is_not_one():
+    asked = []
+    session = ZmartController(_module_driver(asked), {})
+
+    answer = session.acquire("A1", acquisition_type="")
+
+    assert answer["success"] is False
+    assert "acquisition_type must be a word" in answer["content"]
+    assert asked == []
