@@ -32,7 +32,7 @@ class ZmartDriver:
         raise NotImplementedError("ZmartDriver.disconnect: close the connection")
 
     def get_info(self):
-        """Return ``True, (description, setup)``.
+        """Return ``True, (description, setup, chooses_its_own_folder)``.
 
         ``description`` is the microscope in plain words: what each
         changeable setting means, its unit and bounds, which objective sits
@@ -40,9 +40,14 @@ class ZmartDriver:
         ``{item: {"done": bool, "says": text}}``: each thing set up once on
         this microscope (its limits, a calibration, where and how it saves),
         whether it is done, and in words what it holds or what to do; ``{}``
-        when there is nothing to set up.
+        when there is nothing to set up. ``chooses_its_own_folder`` is
+        ``False`` when ``acquire`` saves in the ``output_folder`` it is
+        given, and ``True`` when the vendor software always saves in a place
+        of its own; say where in ``setup``.
         """
-        raise NotImplementedError("ZmartDriver.get_info: return True, (description, setup)")
+        raise NotImplementedError(
+            "ZmartDriver.get_info: return True, (description, setup, chooses_its_own_folder)"
+        )
 
     def get_actuators(self):
         """Return ``True, (x, y, z)``, each ``{"options": [motor names], "default": one of them}``.
@@ -125,11 +130,18 @@ class ZmartDriver:
         """
         raise NotImplementedError("ZmartDriver.get_acquisition_settings: return True, settings")
 
-    def acquire(self, position_label, acquisition_settings):
+    def acquire(self, position_label, acquisition_settings, acquisition_type, output_folder):
         """Capture here, save, and return ``True, (files, planes)``, or ``False, message``.
 
         ``position_label`` is the workflow's name for this capture, handed on
-        as it was given. Never overwrite an earlier file. ``files`` lists the
+        as it was given. ``acquisition_type`` is the kind of acquisition in
+        the run, such as ``"overview"``: put it in the file names and the
+        metadata (the controller has filled in ``"acquisition"`` when the
+        workflow gave none). ``output_folder`` is the folder to save in, as
+        text, or ``None`` for the place set up on this microscope. When the
+        vendor software always saves in its own place, save there, list the
+        real paths, and say so in ``get_info``; never refuse for it. Never
+        overwrite an earlier file. ``files`` lists the
         path of every file saved. ``planes``
         has one entry per saved image plane: its ``path``, its ``c``, ``z``
         and ``t`` counted from 0, and ``x_um``, ``y_um``, ``z_um``, the

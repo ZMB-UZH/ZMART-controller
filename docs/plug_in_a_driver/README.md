@@ -124,14 +124,17 @@ Close cleanly, so that the vendor software can be opened again.
 
 ```python
 def get_info(self):
-    return True, (description, setup)
-    # description   str: the settings, their units and limits, the objectives, which way +z points
-    # setup         {item: {"done": bool, "says": str}}: each thing set up once on this microscope; {} if none
+    return True, (description, setup, chooses_its_own_folder)
+    # description             str: the settings, their units and limits, the objectives, which way +z points
+    # setup                   {item: {"done": bool, "says": str}}: each thing set up once on this microscope; {} if none
+    # chooses_its_own_folder  False: acquire saves in the output_folder it is given; True: the software always saves in its own place
 ```
 
 The description is what a person or an AI agent reads to understand your microscope. Write what the other commands cannot tell.
 
 `setup` lists what is set up once on this microscope, such as its limits, a calibration, or where and in which format it saves. For each item, say whether it is done, and in words what it holds or, when it is not done, what to run. A program can then tell the operator what is missing before anything is captured.
+
+`chooses_its_own_folder` says whether `acquire` saves where it is told. Answer `False` when your driver can choose the folder: it writes the files itself, or the vendor software takes a folder. Answer `True` only when the vendor software always saves in a place of its own, and say in `setup` where that is.
 
 <br>
 
@@ -217,14 +220,17 @@ Acquisition settings say only how an acquisition is triggered. For example, `sna
 #### `acquire`
 
 ```python
-def acquire(self, position_label, acquisition_settings):
-    # take an image, save it, never overwrite; position_label is the workflow's name, as given
+def acquire(self, position_label, acquisition_settings, acquisition_type, output_folder):
+    # take an image, save it in output_folder (your own place when it is None), never overwrite;
+    # position_label is the workflow's name, as given; acquisition_type goes in the file names and metadata
     return True, (files, planes)
-    # files    ["D:/images/A1.ome.tif", ...]
+    # files    ["D:/runs/run-1/overview_A1.ome.tif", ...]
     # planes   [{"path": ..., "c": 0, "z": 0, "t": 0, "x_um": ..., "y_um": ..., "z_um": ...}, ...]
 ```
 
 The call should return when the acquisition is done. Return every saved file and every image plane with its stage position. A workflow then finds its images in the same way on every microscope.
+
+`acquisition_type` is the kind of acquisition in the workflow's run, such as `"overview"`, `"focussing"` or `"targets"`. Put it in your file names (the mock names a file `<acquisition_type>_<position_label>`) and in the metadata you save. The controller hands you `"acquisition"` when the workflow gave none and reports the type in its answer, so you return only `files` and `planes`. `output_folder` is the folder to save in, as text, or `None` for the place set up on the microscope. When your vendor software always saves in a place of its own, save there and return the real paths; never refuse. Say so in `get_info` with `chooses_its_own_folder`. `check_acquire_answer(answer, output_folder=..., chooses_its_own_folder=...)` checks that every file lies in the folder it was given, unless the driver chooses its own.
 
 Every plane says where on the sample it was taken, in the frame `set_xyz` takes: `x_um` and `y_um` are the centre of the field of view, the stage position, never a corner of the image. A z-stack the microscope makes by itself is described the same way on every microscope: `z_um` is each slice's own height, `z = 0` is the lowest slice and each depth above it is higher, whichever way the microscope moved, and the channels of one slice share its height. `check_acquire_answer` refuses an answer that does not.
 

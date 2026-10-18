@@ -33,10 +33,14 @@ University of Zurich (thom.dehoog@zmb.uzh.ch, thomdehoog@gmail.com).
 from __future__ import annotations
 
 from functools import partial
+from os import PathLike
 from typing import Any
 
 #: The unit of every position, reading and canvas in a ``get_xyz`` or ``set_xyz`` answer.
 UNIT = "micrometer"
+
+#: The kind of acquisition ``acquire`` names when the workflow gives none.
+DEFAULT_ACQUISITION_TYPE = "acquisition"
 
 
 class ZmartController:
@@ -72,7 +76,12 @@ class ZmartController:
             self._handle.disconnect()
 
     def get_info(self) -> dict:
-        """The microscope in plain words, and what is set up on it, such as where it saves."""
+        """The microscope in plain words, what is set up on it, and whether it chooses its own folder.
+
+        ``chooses_its_own_folder`` is True for a microscope whose software
+        always saves in its own place, whatever ``output_folder`` ``acquire``
+        is given; its answers then list where the files really are.
+        """
         try:
             ok, result = self._handle.get_info()
 
@@ -82,9 +91,16 @@ class ZmartController:
         if not ok:
             return {"success": False, "content": result}
 
-        description, setup = result
+        description, setup, chooses_its_own_folder = result
 
-        return {"success": True, "content": {"description": description, "setup": setup}}
+        return {
+            "success": True,
+            "content": {
+                "description": description,
+                "setup": setup,
+                "chooses_its_own_folder": chooses_its_own_folder,
+            },
+        }
 
     def get_actuators(self) -> dict:
         """The motors per axis, and the one used when none is chosen.
@@ -194,10 +210,30 @@ class ZmartController:
 
         return {"success": True, "content": settings}
 
-    def acquire(self, position_label: str, acquisition_settings: dict | None = None) -> dict:
-        """Capture an image here and save it; the answer lists every file and image plane."""
+    def acquire(
+        self,
+        position_label: str,
+        acquisition_settings: dict | None = None,
+        acquisition_type: str | None = None,
+        output_folder: str | PathLike | None = None,
+    ) -> dict:
+        """Capture an image here and save it; the answer lists every file and image plane.
+
+        ``acquisition_type`` says what kind of acquisition this is in the
+        run, such as ``"overview"`` or ``"targets"``; the driver puts it in
+        its file names and metadata, and the answer reports it beside
+        ``position_label``. Left out, it is ``DEFAULT_ACQUISITION_TYPE``.
+        ``output_folder`` is where the files go; left out, the driver saves
+        where it was set up to. A microscope whose software always saves in
+        its own place saves there instead and says so in ``get_info``; the
+        answer always lists where the files really are.
+        """
         try:
-            ok, result = self._handle.acquire(position_label, acquisition_settings)
+            acquisition_type = acquisition_type_or_default(acquisition_type)
+            output_folder = output_folder_as_text(output_folder)
+            ok, result = self._handle.acquire(
+                position_label, acquisition_settings, acquisition_type, output_folder
+            )
 
         except Exception as error:
             return {"success": False, "content": f"{type(error).__name__}: {error}"}
@@ -209,7 +245,12 @@ class ZmartController:
 
         return {
             "success": True,
-            "content": {"position_label": position_label, "files": files, "planes": planes},
+            "content": {
+                "position_label": position_label,
+                "acquisition_type": acquisition_type,
+                "files": files,
+                "planes": planes,
+            },
         }
 
     def get_procedures(self) -> dict:
@@ -265,6 +306,36 @@ def chosen_actuators(offered: dict, with_actuators: dict | None) -> dict[str, st
             )
         chosen[axis] = name
     return chosen
+
+
+def acquisition_type_or_default(acquisition_type: str | None) -> str:
+    """The kind of acquisition: the one given, or ``DEFAULT_ACQUISITION_TYPE`` when none is.
+
+    Every driver receives a word, so the kind is named the same way in every
+    file and answer. Raises ``ValueError`` for anything but a word, before the
+    driver is asked anything. A driver that is a module, whose functions the
+    workflow calls directly, uses this too.
+    """
+    if acquisition_type is None:
+        return DEFAULT_ACQUISITION_TYPE
+    if not isinstance(acquisition_type, str) or not acquisition_type.strip():
+        raise ValueError(
+            f"acquisition_type must be a word, such as 'overview', not {acquisition_type!r}"
+        )
+    return acquisition_type
+
+
+def output_folder_as_text(output_folder: str | PathLike | None) -> str | None:
+    """The folder to save in as text, or None when the driver's own place is meant.
+
+    Raises ``ValueError`` for anything that is not a folder's path, before the
+    driver is asked anything.
+    """
+    if output_folder is None:
+        return None
+    if not isinstance(output_folder, (str, PathLike)) or not str(output_folder).strip():
+        raise ValueError(f"output_folder must be a folder's path, not {output_folder!r}")
+    return str(output_folder)
 
 
 def _xyz_content(result, chosen: dict[str, str]) -> dict:

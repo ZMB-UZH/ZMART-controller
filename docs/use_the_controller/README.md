@@ -34,7 +34,7 @@ mic.set_state(state)
 
 # 5) Capture and save an image with the appropriate acquisition settings
 mic.get_acquisition_settings()
-mic.acquire(position_label, acquisition_settings=None)
+mic.acquire(position_label, acquisition_settings=None, acquisition_type=None, output_folder=None)
 
 # 6) Run a routine the microscope offers (for example autofocus)
 #        (the routines are not standardised either and differ between microscopes)
@@ -117,10 +117,11 @@ mic.get_info()
                               '10x/0.30 air, slot 2 is 20x/0.75 air, slot 3 is 63x/1.40 oil. Channels: '
                               'DAPI, GFP and TxRed, each with its own exposure in milliseconds and '
                               'LED power in percent.',
-               'setup': {'<something set up once on this microscope>': {'done': True, 'says': '<whatever context you want to provide>'}}}}
+               'setup': {'<something set up once on this microscope>': {'done': True, 'says': '<whatever context you want to provide>'}},
+               'chooses_its_own_folder': False}}
   ```
 
-- **Note:** A description of the microscope, written by the driver's author. It explains the settings and the axes. Read it once when you start on a new microscope. `setup` lists what is set up once on this microscope, such as where and how it saves, each with whether it is done.
+- **Note:** A description of the microscope, written by the driver's author. It explains the settings and the axes. Read it once when you start on a new microscope. `setup` lists what is set up once on this microscope, such as where and how it saves, each with whether it is done. `chooses_its_own_folder` is `False` when `acquire` saves in the `output_folder` you give it, and `True` when the microscope's software always saves in its own place; `acquire` then saves there, and its answer says where.
 
 <br>
 
@@ -251,19 +252,22 @@ mic.get_acquisition_settings()
 ### mic.acquire()
 
 ```python
-mic.acquire(position_label, acquisition_settings=None)
+mic.acquire(position_label, acquisition_settings=None, acquisition_type=None, output_folder=None)
 ```
 
 - **Input**
   - `position_label`: a name for this position, for example `"A1"`. The controller hands it to the driver as it is.
   - `acquisition_settings`: optional; values from `get_acquisition_settings`, for example `{"trigger": "full"}`. Default: the `active` value of every setting.
-- **Output (example)**
+  - `acquisition_type`: optional; what kind of acquisition this is in your run, for example `"overview"`, `"focussing"` or `"targets"`. The driver puts it in the file names and the metadata, and the answer reports it beside `position_label`. Default: `"acquisition"`.
+  - `output_folder`: optional; the folder to save in, for example the folder of this run. Default: the place set up on the microscope (see `setup` in `get_info`). A microscope whose software always saves in its own place saves there instead, and says so in `get_info` with `chooses_its_own_folder: True`; it is never refused for that, and `files` says where the files really are.
+- **Output (example)**, for `mic.acquire("A1", acquisition_type="overview", output_folder="D:/runs/run-1")` on the mock
 
   ```python
   {'success': True,
    'content': {'position_label': 'A1',
-               'files': ['/tmp/zmart-mock-output/A1.ome.tif', '/tmp/zmart-mock-output/A1.commands.json'],
-               'planes': [{'path': '/tmp/zmart-mock-output/A1.ome.tif', 'c': 0, 'z': 0, 't': 0,
+               'acquisition_type': 'overview',
+               'files': ['D:/runs/run-1/overview_A1.ome.tif', 'D:/runs/run-1/overview_A1.commands.json'],
+               'planes': [{'path': 'D:/runs/run-1/overview_A1.ome.tif', 'c': 0, 'z': 0, 't': 0,
                            'x_um': 100.0, 'y_um': 50.0, 'z_um': 0.0}]}}
   ```
 

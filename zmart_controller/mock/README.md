@@ -27,8 +27,11 @@ answer["content"]["planes"]  # for each picture: its file, channel, depth and st
 The pictures show a slide of small bright spots, like fluorescent beads.
 Move the stage and the spots move; change the focus and they blur.
 
-Images are saved under the system's temporary folder unless the connection
-dictionary names an `output_root`, as OME-TIFF unless it says `"format": "ome-zarr"`.
+Images are saved in the `output_folder` that `acquire` is given, or else under
+the system's temporary folder unless the connection dictionary names an
+`output_root`, as OME-TIFF unless it says `"format": "ome-zarr"`. Each file is
+named by the `acquisition_type` (`"acquisition"` when none is given), then the
+position label, and the type is also in its metadata.
 Before each acquisition the mock takes up the stage's slack; `"backlash_correction": False`
 leaves that out. Like a real microscope's setup, these are chosen once, when you
 connect, not per acquisition. Two more connection entries are useful while

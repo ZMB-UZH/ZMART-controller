@@ -333,10 +333,10 @@ class TestDataHandling:
         ]
         names = [Path(f).name for f in answer["files"]]
         assert names == [
-            "cell_1_z000.ome.tif",
-            "cell_1_z001.ome.tif",
-            "cell_1_z002.ome.tif",
-            "cell_1.commands.json",
+            "acquisition_cell_1_z000.ome.tif",
+            "acquisition_cell_1_z001.ome.tif",
+            "acquisition_cell_1_z002.ome.tif",
+            "acquisition_cell_1.commands.json",
         ]
         description = _tiff_description(Path(answer["files"][1]))
         assert 'PhysicalSizeX="1.0"' in description
@@ -388,8 +388,8 @@ class TestDataHandling:
     def test_never_overwrites(self, mic):
         first = mic.acquire(position_label="A1")["content"]["files"]
         second = mic.acquire(position_label="A1")["content"]["files"]
-        assert Path(first[0]).name == "A1.ome.tif"
-        assert Path(second[0]).name == "A1_001.ome.tif"
+        assert Path(first[0]).name == "acquisition_A1.ome.tif"
+        assert Path(second[0]).name == "acquisition_A1_001.ome.tif"
 
     def test_the_command_log_is_saved(self, mic):
         mic._handle.scope.faults.add("MoveStage", "busy")
@@ -522,7 +522,7 @@ class TestProblemsFoundInReview:
         label = "well_B07_field_" + "x" * 100
         answer = mic.acquire(position_label=label)
         assert answer["success"] is True, answer["content"].get("reason")
-        assert Path(answer["content"]["files"][0]).name.startswith(label)
+        assert Path(answer["content"]["files"][0]).name.startswith(f"acquisition_{label}")
 
     def test_acquire_near_the_lower_limit(self, mic):
         mic.set_xyz(-4980, -5000, 0)  # 20 µm from the x limit, right at the y limit

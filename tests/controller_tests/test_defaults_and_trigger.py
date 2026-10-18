@@ -4,7 +4,8 @@ The driver decides every default and the answers say it: ``get_actuators``
 names the default motor per axis, ``get_xyz`` and ``set_xyz`` both use it
 for an axis the caller leaves out and say which motor they used, and every
 acquisition setting carries a ``default``. ``get_info`` answers the
-description and the set-up items; where a microscope saves is a set-up item.
+description, the set-up items and whether the microscope chooses its own
+folder; where a microscope saves is a set-up item.
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ class Scope(ZmartDriver):
     info = (
         "A scope in memory. +z points up.",
         {"saving": {"done": True, "says": "OME-TIFF under D:/data"}},
+        False,
     )
 
     def __init__(self, connection):
@@ -149,6 +151,7 @@ def test_get_info_answers_the_description_and_the_setup():
     assert content == {
         "description": "A scope in memory. +z points up.",
         "setup": {"saving": {"done": True, "says": "OME-TIFF under D:/data"}},
+        "chooses_its_own_folder": False,
     }
 
 

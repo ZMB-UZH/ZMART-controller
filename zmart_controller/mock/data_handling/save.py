@@ -1,14 +1,15 @@
 """Saving one acquisition in the files ZMART uses, and reporting where it went.
 
-The layout under the output folder is::
+The layout in the folder saved to (the ``output_folder`` acquire was given,
+or else the connection's ``output_root``) is::
 
-    <output_root>/<position_label>.ome.tif          one plane
-    <output_root>/<position_label>_z000.ome.tif     a z-stack, one file per plane
-    <output_root>/<position_label>.ome.zarr/        OME-Zarr, any number of planes
-    <output_root>/<position_label>.commands.json    the command log
+    <folder>/<type>_<position_label>.ome.tif          one plane
+    <folder>/<type>_<position_label>_z000.ome.tif     a z-stack, one file per plane
+    <folder>/<type>_<position_label>.ome.zarr/        OME-Zarr, any number of planes
+    <folder>/<type>_<position_label>.commands.json    the command log
 
-Every name starts with the label the workflow gave, so a workflow that wants
-its acquisitions told apart says so in the label.
+``<type>`` is the acquisition type, such as ``overview``, so the kinds of
+acquisition in a run are told apart by name; the label then names the place.
 
 Nothing is ever overwritten: a second acquisition with the same label gets
 ``_001``, ``_002`` and so on.
@@ -56,11 +57,13 @@ def save_acquisition(
     *,
     vendor_file: str,
     position_label: str,
+    acquisition_type: str,
+    folder: Path,
     image_format: str,
     position_um: dict[str, float],
     log_mark: int,
 ) -> dict[str, Any]:
-    """Turn the vendor's file into OME-TIFF or OME-Zarr, and save the command log.
+    """Turn the vendor's file into OME-TIFF or OME-Zarr in ``folder``, and save the command log.
 
     ``position_um`` is the user position at which the image was taken.
     ``log_mark`` is the command-log bookmark taken before the acquisition
@@ -96,13 +99,13 @@ def save_acquisition(
     }
     extra = {
         "position_label": position_label,
+        "acquisition_type": acquisition_type,
         "objective": header["objective"]["name"],
         "vendor_file": str(vendor_file),
         "registration": ctx.config.sources["image_stage_registration"],
         "calibration": ctx.config.sources["optical_calibration"],
     }
-    label = safe_name(position_label)
-    folder = Path(ctx.output_root)
+    label = safe_name(f"{acquisition_type}_{position_label}")
     folder.mkdir(parents=True, exist_ok=True)
     files: list[str] = []
     if image_format == "ome-zarr":

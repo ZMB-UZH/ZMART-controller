@@ -63,7 +63,11 @@ from zmart_controller.mock.get_actions import GetDispatcher
 from zmart_controller.mock.procedures import PROCEDURES
 from zmart_controller.mock.set_actions import Gate, SetDispatcher
 from zmart_controller.mock.vendor_interface import NAME_LIMIT, MockScopeConnection
-from zmart_controller.zmart_controller import UNIT
+from zmart_controller.zmart_controller import (
+    UNIT,
+    acquisition_type_or_default,
+    output_folder_as_text,
+)
 
 logger = logging.getLogger("zmart_controller.mock")
 
@@ -237,7 +241,7 @@ Objectives, by slot: 1 is 10x/0.30 Air (1.0 µm per pixel), 2 is 20x/0.75 Air (0
 
 Settings (the changeable part of the state): objective is the slot number above; laser_power is the excitation in percent, {laser_power}; gain is the detector gain, {gain}; exposure_ms is the exposure time in milliseconds, {exposure_ms}. The image gets brighter with more laser power, gain or exposure; very bright settings saturate it. z_planes and z_step_um are the stored stack, the number of planes and the step between them in micrometres, upwards from the current height.
 
-Triggers: snap takes one plane here with the settings as they are; full takes the stored stack. Each image is saved under the output folder, in a file whose name starts with the position label."""
+Triggers: snap takes one plane here with the settings as they are; full takes the stored stack. Each image is saved in the output folder acquire is given, or else under the connection's output_root, in a file whose name is the acquisition type, then the position label."""
 
 
 def _described(limits: dict) -> str:
@@ -258,12 +262,14 @@ def get_info(handle: MockHandle) -> dict:
     """A description of the microscope, what is set up on it, and the configuration in use.
 
     The one set-up item is saving: where the images go and in which format,
-    as the connection chose them. The workflow decides where its own runs go.
+    as the connection chose them. The workflow decides where its own runs go:
+    the mock saves in the ``output_folder`` acquire is given, so it never
+    chooses its own folder.
     """
     _require_open(handle)
     saving = (
-        f"{FORMAT_NAMES[handle.image_format]} files under {handle.output_root}, "
-        "as the connection's output_root and format say"
+        f"{FORMAT_NAMES[handle.image_format]} files in the output_folder acquire is given, "
+        f"or else under {handle.output_root}, as the connection's output_root and format say"
     )
     return _answer(
         {
@@ -273,6 +279,7 @@ def get_info(handle: MockHandle) -> dict:
             "software": dict(handle.software),
             "configuration": dict(handle.config.sources),
             "setup": {"saving": {"done": True, "says": saving}},
+            "chooses_its_own_folder": False,
         }
     )
 
@@ -490,11 +497,19 @@ def _check_stack(stack: dict) -> None:
 
 
 def acquire(
-    handle: MockHandle, *, position_label: str, acquisition_settings: dict | None = None
+    handle: MockHandle,
+    *,
+    position_label: str,
+    acquisition_settings: dict | None = None,
+    acquisition_type: str | None = None,
+    output_folder: str | None = None,
 ) -> dict:
     """Capture an image (or the stored stack) here and save it, in one step.
 
-    Every file name starts with ``position_label``. The ``trigger`` decides
+    Every file name is ``acquisition_type``, then ``position_label``; the
+    type, ``"acquisition"`` when none is given, is also in each file's
+    metadata and in the answer. The files go in ``output_folder``, or else
+    under the connection's ``output_root``. The ``trigger`` decides
     what is taken: ``snap``, one plane with the settings as they are, or
     ``full``, the whole stack stored in the state. How the files are saved and
     whether the stage settles first were set at connect. The content lists
@@ -505,6 +520,8 @@ def acquire(
     confirmed, ``success`` is False and no files or planes are listed.
     """
     _require_open(handle)
+    acquisition_type = acquisition_type_or_default(acquisition_type)
+    folder = Path(output_folder_as_text(output_folder) or handle.output_root)
     settings = _with_defaults(acquisition_settings)
     stack = handle.stack if settings["trigger"] == "full" else {"z_planes": 1, "z_step_um": 1.0}
     mark = handle.log.mark()
@@ -518,6 +535,7 @@ def acquire(
     )
     content: dict[str, Any] = {
         "position_label": position_label,
+        "acquisition_type": acquisition_type,
         "trigger": settings["trigger"],
         "format": handle.image_format,
         "settle": "backlash-corrected" if handle.backlash_correction else "direct",
@@ -532,6 +550,8 @@ def acquire(
         handle,
         vendor_file=outcome.result,
         position_label=position_label,
+        acquisition_type=acquisition_type,
+        folder=folder,
         image_format=handle.image_format,
         position_um=position,
         log_mark=mark,

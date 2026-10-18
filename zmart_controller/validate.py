@@ -14,6 +14,7 @@ University of Zurich (thom.dehoog@zmb.uzh.ch, thomdehoog@gmail.com).
 
 from __future__ import annotations
 
+import inspect
 import math
 from pathlib import Path
 from typing import Any
@@ -30,7 +31,8 @@ def validate_driver(driver: Any, connection: dict[str, Any] | None = None) -> li
     ``driver`` is the driver's ``zmart_driver.json`` or its folder, as for
     ``register_driver``, or anything ``ZmartController`` accepts, such as a
     ``ZmartDriver`` class with its ``connection``. It moves nothing and
-    acquires nothing.
+    acquires nothing: of ``acquire`` it checks only that it takes
+    ``acquisition_type`` and ``output_folder``.
 
     Returns the problems found, one sentence each. Empty means the driver fits.
     Raises whatever the driver raises on connect.
@@ -39,7 +41,7 @@ def validate_driver(driver: Any, connection: dict[str, Any] | None = None) -> li
 
     if isinstance(driver, (str, Path)) and Path(driver).exists():
         driver = load_driver(driver)
-    problems: list[str] = []
+    problems: list[str] = _acquire_parameter_problems(driver)
     session = ZmartController(driver, connection)
     try:
         checks = {
@@ -64,6 +66,26 @@ def validate_driver(driver: Any, connection: dict[str, Any] | None = None) -> li
     return problems
 
 
+def _acquire_parameter_problems(driver: Any) -> list[str]:
+    """Check that the driver's ``acquire`` takes ``acquisition_type`` and ``output_folder``.
+
+    Read from its signature, so nothing is acquired. A ``ZmartDriver`` class
+    is read by its method, a driver that is a module by its function.
+    """
+    driver_class = driver if isinstance(driver, type) else getattr(driver, "ZmartDriver", None)
+    acquire = getattr(driver_class or driver, "acquire", None)
+    if not callable(acquire):
+        return []  # connecting reports a driver without acquire
+    parameters = inspect.signature(acquire).parameters
+    takes_any = any(p.kind is inspect.Parameter.VAR_KEYWORD for p in parameters.values())
+    if takes_any or {"acquisition_type", "output_folder"} <= set(parameters):
+        return []
+    return [
+        "acquire must take acquisition_type and output_folder, the kind of acquisition and "
+        "the folder to save in"
+    ]
+
+
 def _envelope(name: str, answer: Any, problems: list[str]):
     """Check the ``{"success", "content"}`` shape; return the content, or None."""
     if not isinstance(answer, dict) or not {"success", "content"} <= set(answer):
@@ -85,6 +107,11 @@ def _check_info(content, problems):
         )
     if not isinstance(content, dict):
         return
+    if not isinstance(content.get("chooses_its_own_folder"), bool):
+        problems.append(
+            "get_info: chooses_its_own_folder must be True or False: whether acquire saves "
+            "anywhere but in the output_folder it is given"
+        )
     setup = content.get("setup", {})
     if not isinstance(setup, dict):
         problems.append('get_info: setup must map each set-up item to {"done": ..., "says": ...}')
@@ -250,16 +277,27 @@ def _check_procedures(content, problems):
 # ---- checking one acquisition against the contract
 
 
-def check_acquire_answer(answer: Any) -> list[str]:
+def check_acquire_answer(
+    answer: Any,
+    output_folder: str | Path | None = None,
+    chooses_its_own_folder: bool = False,
+) -> list[str]:
     """Check what a driver's ``acquire`` answered against the contract.
 
     ``answer`` is the whole answer, ``{"success": ..., "content": ...}``. The
-    content must name the ``position_label`` it was given, and list under
+    content must name the ``position_label`` it was given and the
+    ``acquisition_type``, and list under
     ``files`` the path of every file the acquisition saved: the images and
     anything saved beside them. A format kept as a
     folder, such as OME-Zarr, is listed by its folder. Every path must exist.
     This is how a workflow finds the pictures on any microscope, so a driver
     that keeps them under a name of its own works with none of them.
+
+    ``output_folder`` is the folder ``acquire`` was given: every file must
+    then lie in it, unless the driver says in ``get_info`` that it chooses
+    its own folder (pass its ``chooses_its_own_folder``). Such a driver saves
+    where its software always saves, and its files must still exist where
+    the answer says.
 
     ``planes`` then says, for every saved image plane, which file it is in,
     which channel, depth and moment it is (``c``, ``z`` and ``t``, each
@@ -291,6 +329,11 @@ def check_acquire_answer(answer: Any) -> list[str]:
         return problems + ["acquire: the content must be a dict"]
     if "position_label" not in content:
         problems.append("acquire: the content must contain position_label")
+    kind = content.get("acquisition_type")
+    if not (isinstance(kind, str) and kind.strip()):
+        problems.append(
+            "acquire: the content must contain acquisition_type, the kind of acquisition it was"
+        )
     if "files" not in content:
         problems.append(
             "acquire: the content must contain files, the list of paths of every file it saved"
@@ -305,6 +348,13 @@ def check_acquire_answer(answer: Any) -> list[str]:
     for path in files:
         if not Path(path).exists():
             problems.append(f"acquire: files names {path}, which does not exist")
+        elif output_folder is not None and not chooses_its_own_folder:
+            if not Path(path).resolve().is_relative_to(Path(output_folder).resolve()):
+                problems.append(
+                    f"acquire: files names {path}, which is not in the output_folder "
+                    f"{output_folder} it was given; a driver whose software saves in its own "
+                    "place says so in get_info (chooses_its_own_folder)"
+                )
     return problems + _plane_problems(answer.get("success") is True, content, files)
 
 

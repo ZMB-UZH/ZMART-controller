@@ -110,11 +110,15 @@ class TestAcquire:
         assert rec["success"] is True
         rec = rec["content"]
         assert rec["position_label"] == "A1"
+        assert rec["acquisition_type"] == "acquisition"  # the default kind
         assert rec["settle"] == "backlash-corrected"  # the connection's default
         assert rec["format"] == "ome-tiff"  # the connection's default
         assert rec["trigger"] == "snap"  # the active trigger
         assert rec["confirmed"] is True
-        assert [Path(f).name for f in rec["files"]] == ["A1.ome.tif", "A1.commands.json"]
+        assert [Path(f).name for f in rec["files"]] == [
+            "acquisition_A1.ome.tif",
+            "acquisition_A1.commands.json",
+        ]
         assert all(Path(f).is_file() for f in rec["files"])
         assert rec["files"][-1] == rec["command_log"]
 
@@ -128,7 +132,10 @@ class TestAcquire:
             session.disconnect()
         assert rec["settle"] == "direct"
         assert rec["format"] == "ome-zarr"
-        assert [Path(f).name for f in rec["files"]] == ["B2.ome.zarr", "B2.commands.json"]
+        assert [Path(f).name for f in rec["files"]] == [
+            "acquisition_B2.ome.zarr",
+            "acquisition_B2.commands.json",
+        ]
         assert (Path(rec["files"][0]) / "zarr.json").is_file()
 
     def test_acquisition_settings_only_say_how_to_trigger(self, mic):

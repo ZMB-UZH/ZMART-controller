@@ -145,7 +145,7 @@ def test_a_description_that_says_nothing_is_reported(monkeypatch, description):
         "get_info",
         lambda handle: {
             "success": True,
-            "content": {"description": description},
+            "content": {"description": description, "chooses_its_own_folder": False},
         },
     )
     assert validate_driver(mock) == [
@@ -197,7 +197,7 @@ def _acquire(connection=None, **stack):
 
 
 def _answer(**content):
-    base = {"position_label": "A1"}
+    base = {"position_label": "A1", "acquisition_type": "acquisition"}
     return {"success": True, "content": {**base, **content}}
 
 
@@ -230,7 +230,11 @@ def test_the_mocks_acquisition_fits():
 def test_files_names_everything_the_acquisition_saved():
     content = _acquire(z_planes=2)["content"]
     names = [Path(path).name for path in content["files"]]
-    assert names == ["A1_z000.ome.tif", "A1_z001.ome.tif", "A1.commands.json"]
+    assert names == [
+        "acquisition_A1_z000.ome.tif",
+        "acquisition_A1_z001.ome.tif",
+        "acquisition_A1.commands.json",
+    ]
     assert content["command_log"] in content["files"]
 
 
@@ -407,6 +411,7 @@ def test_the_label_must_come_back():
     problems = check_acquire_answer({"success": False, "content": content})
     assert problems == [
         "acquire: the content must contain position_label",
+        "acquire: the content must contain acquisition_type, the kind of acquisition it was",
     ]
 
 

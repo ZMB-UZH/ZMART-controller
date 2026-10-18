@@ -74,7 +74,7 @@ mic.set_state(Dict)
 
 # 5) Capture and save an image with the appropriate acquisition settings
 mic.get_acquisition_settings()
-mic.acquire(position_label=String, acquisition_settings=Dict)
+mic.acquire(position_label=String, acquisition_settings=Dict, acquisition_type=String, output_folder=String)
 
 # 6) Run a routine the microscope offers (for example autofocus)
 mic.get_procedures()

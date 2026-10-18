@@ -35,7 +35,7 @@ class PretendDriver(ZmartDriver):
         pass
 
     def get_info(self):
-        return True, ("A pretend microscope. +z points up.", {})
+        return True, ("A pretend microscope. +z points up.", {}, False)
 
     def get_actuators(self):
         return True, (
@@ -72,8 +72,9 @@ class PretendDriver(ZmartDriver):
     def get_acquisition_settings(self):
         return True, {"trigger": {"options": ["snap"], "default": "snap", "active": "snap"}}
 
-    def acquire(self, position_label, acquisition_settings):
-        path = self.folder / f"{position_label}.json"
+    def acquire(self, position_label, acquisition_settings, acquisition_type, output_folder):
+        folder = Path(output_folder) if output_folder is not None else self.folder
+        path = folder / f"{acquisition_type}_{position_label}.json"
         path.write_text(json.dumps({"position": self.position, "exposure_ms": self.exposure_ms}))
         p = self.position
         plane = {"path": str(path), "c": 0, "z": 0, "t": 0}
