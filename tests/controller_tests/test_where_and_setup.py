@@ -12,10 +12,12 @@ from __future__ import annotations
 import pytest
 
 from zmart_controller import ZmartController, validate_driver
-from zmart_controller.template.zmart_driver import ZmartDriver
+from zmart_controller.template.zmart_controller_plugin.zmart_controller_plugin import (
+    ZmartControllerPlugin,
+)
 
 
-class Scope(ZmartDriver):
+class Scope(ZmartControllerPlugin):
     """A driver that lives in memory; ``info`` and ``settings`` are what it answers."""
 
     info = (
@@ -63,7 +65,7 @@ def scope(**answers):
 def test_get_info_says_what_is_set_up():
     session = ZmartController(Scope, {})
 
-    content = session.get_info()["content"]
+    content = session.get_info()["output"]
 
     assert content == {
         "description": "A scope in memory. +z points up.",
@@ -82,7 +84,7 @@ def test_a_scope_not_yet_told_where_to_save_says_so_and_how():
         )
     )
 
-    content = ZmartController(driver, {}).get_info()["content"]
+    content = ZmartController(driver, {}).get_info()["output"]
 
     assert content["setup"]["data_location"] == {
         "done": False,
@@ -110,7 +112,7 @@ def test_a_default_may_differ_from_the_active_value():
         settings={"trigger": {"options": ["snap", "full"], "default": "snap", "active": "full"}}
     )
 
-    content = ZmartController(driver, {}).get_acquisition_settings()["content"]
+    content = ZmartController(driver, {}).get_acquisition_settings()["output"]
 
     assert content["trigger"] == {"options": ["snap", "full"], "default": "snap", "active": "full"}
     assert validate_driver(driver, {}) == []

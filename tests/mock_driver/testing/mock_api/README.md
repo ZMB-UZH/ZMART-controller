@@ -1,11 +1,11 @@
 # The mock API: MockScope Control
 
 This folder holds pretend vendor software, **MockScope Control**, with a
-pretend microscope behind it. It plays the part that LAS X plays for a Leica
-microscope, NIS-Elements for a Nikon, or ZEN for a ZEISS. It lets you build
-and test every part of a driver on a laptop, without hardware.
+pretend microscope behind it. It plays the part that the vendor's own
+software plays for a real microscope. It lets you build and test every part
+of a driver on a laptop, without hardware.
 
-In the [driver anatomy](https://github.com/thomdehoog/ZMART-drivers/blob/main/docs/driver-anatomy.md),
+In the [driver anatomy](https://github.com/ZMB-UZH/ZMART-drivers/blob/main/docs/driver-anatomy.md),
 this is the **mock API**: the stand-in at the
 very bottom of a driver, below the vendor interface. The driver's vendor
 interface talks to MockScope exactly the way a real driver talks to real
@@ -34,7 +34,7 @@ micrometres, and its error handling sorts the codes into kinds.
 ## Getting started
 
 ```python
-from zmart_controller.mock.testing.mock_api import MockScope
+from mock_driver.testing.mock_api import MockScope
 
 scope = MockScope(output_folder="images")  # the folder must exist
 scope.send("Login", token="mock-token")
@@ -104,7 +104,7 @@ For exact, fast tests, use a `FakeClock`, which only moves when you tell it
 to:
 
 ```python
-from zmart_controller.mock.testing.mock_api import FakeClock, MockScope
+from mock_driver.testing.mock_api import FakeClock, MockScope
 
 clock = FakeClock()
 scope = MockScope(output_folder="images", clock=clock)

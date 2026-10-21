@@ -1,8 +1,7 @@
 {
-  "name": "<the name you want the driver listed under by get_instruments(), for example stellaris>",
-  "driver": "zmart_driver.py",
+  "name": "<the name you want the driver listed under by get_instruments(), for example my-scope>",
   "connection": {
-    "microscope": "<a name for this particular instrument, for example stellaris5-room-42>",
+    "microscope": "<a name for this particular instrument, for example room-42-widefield>",
     "api_type": "<how the vendor software is reached, for example socket, grpc or dll>",
     "host": "<if the vendor software listens on a network address, put it here>",
     "password": "<if the vendor software requires a password or token, put it here>",

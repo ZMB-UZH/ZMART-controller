@@ -8,34 +8,48 @@
 
 ## 1) What is a ZMART driver
 
-The controller stands in between your workflow and the driver. It knows nothing about any particular workflow or microscope. 
+The controller stands in between your workflow and the driver. It knows nothing about any particular workflow or microscope.
 It takes input from your workflow through a short, fixed list of commands and hands these to the driver. You can have multiple workflows and multiple drivers, but you only have one controller.
 
 ```
 your workflow ──► controller ──► driver ──► vendor software ──► microscope
 ```
 
-A ZMART driver is a folder with at least two files:
+A ZMART driver is a folder. The part the controller talks to, the driver's
+plugin, is always in its `zmart_controller_plugin/` folder, as two files:
 
-- `zmart_driver.json` holds the driver's name, where its ZMART-driver class file is,
-  and how to reach the microscope. 
-- `zmart_driver.py` holds the `ZmartDriver` class, which integrates the
-  code that drives the microscope, one method per command that must comply
-  with what the ZMART controller needs.
-- Optional other tooling for interacting with the microscope
+- `zmart_controller_plugin.json` holds the driver's name and how to reach the
+  microscope.
+- `zmart_controller_plugin.py` holds the `ZmartControllerPlugin` class, which
+  integrates the code that drives the microscope, one method per command that
+  must comply with what the ZMART controller needs.
+
+Everything else in the driver's folder is yours: the code that talks to the
+vendor software, and any other tooling for the microscope.
+
+```
+my_driver/                            the ZMART driver
+  zmart_controller_plugin/
+    zmart_controller_plugin.json      its name and how to reach the microscope
+    zmart_controller_plugin.py        class ZmartControllerPlugin
+  ...                                 the rest of your driver
+```
+
+To start one, copy `zmart_controller/template/zmart_controller_plugin/` into
+your driver's folder.
 
 The drivers for the microscopes at the ZMB are in
-the [ZMART drivers](https://github.com/thomdehoog/ZMART-drivers) repository.
+the [ZMART drivers](https://github.com/ZMB-UZH/ZMART-drivers) repository.
 
 ## 2) Installing a ZMART driver
 
-Installing a driver means pointing the controller at the driver's
-`zmart_driver.json`:
+Installing a driver means pointing the controller at the driver's folder,
+the one that holds `zmart_controller_plugin/`:
 
 ```python
 from zmart_controller import mic
 
-mic.register_driver("C:/drivers/my-scope/zmart_driver.json")
+mic.register_driver("C:/drivers/my-scope")
 ```
 
 `register_driver` writes the driver into the registry, the file
@@ -46,18 +60,18 @@ then on
 it by name:
 
 ```python
-mic.get_instruments()                        # {'mock': {}, 'my-scope': {'microscope': ..., 'host': ..., ...}}
+mic.get_instruments()                        # {'my-scope': {'microscope': ..., 'host': ..., ...}}
 mic.connect("my-scope")
 ```
 
 `get_instruments` lists every installed driver with how it connects.
 
-The zmart_driver.json is formatted in the following way: 
+The `zmart_controller_plugin.json` holds the driver's name and its
+connection, nothing else:
 
 ```json
 {
   "name": "<the name you want the driver listed under by get_instruments()>",
-  "driver": "<the file that holds your ZmartDriver class; leave it unless you moved the file>",
   "connection": {
     "microscope": "<a name for this particular instrument>",
     "api_type": "<how the vendor software is reached>",
@@ -71,24 +85,29 @@ The zmart_driver.json is formatted in the following way:
 
 ## 3) Writing a driver
 
-Open `zmart_driver.py` and fill in the methods of the `ZmartDriver` class.
-There is one method per command. When a workflow calls `mic.set_state(...)`,
-the controller calls your `set_state(...)`, and so on for every command.
+Open `zmart_controller_plugin.py` and fill in the methods of the
+`ZmartControllerPlugin` class. There is one method per command. When a
+workflow calls `mic.set_state(...)`, the controller calls your
+`set_state(...)`, and so on for every command. The controller hands every
+value over by name, so keep the parameter names shown below; their order is
+up to you.
 
 ### Input and output
 
 Each method returns two things: `True` and the output, or `False` and an
 error message. The controller turns this into the answer the workflow sees,
-with the keys `success` and `content`. If the method raises an error instead,
+with the keys `success` and `output`. It writes every answer itself, so the
+answer holds exactly what the contract says on every microscope. If the
+method raises an error instead,
 for example because the vendor library failed, the controller catches it and
 answers `False` with the text of the error:
 
 ```python
 def set_state(self, changeable):
     ...
-    return True, applied                     # {"success": True,  "content": {"applied": applied}}
-    return False, "<error message>"          # {"success": False, "content": "<error message>"}
-    raise ValueError("unknown setting")      # anything that raises: {"success": False, "content": "ValueError: unknown setting"}
+    return True, applied                     # {"success": True,  "output": {"applied": applied}}
+    return False, "<error message>"          # {"success": False, "output": "<error message>"}
+    raise ValueError("unknown setting")      # anything that raises: {"success": False, "output": "ValueError: unknown setting"}
 ```
 
 Apply only the settings under `changeable`. Read each one back to check
@@ -101,7 +120,7 @@ that it was applied. A setting the microscope does not have is a failure.
 #### `__init__`
 
 ```python
-def __init__(self, connection):     # connection: the dict from zmart_driver.json
+def __init__(self, connection):     # connection: the dict from zmart_controller_plugin.json
     # open the vendor software; load the origin, travel limits and calibration
 ```
 
@@ -220,7 +239,7 @@ Acquisition settings say only how an acquisition is triggered. For example, `sna
 #### `acquire`
 
 ```python
-def acquire(self, position_label, acquisition_settings, acquisition_type, output_folder):
+def acquire(self, position_label, acquisition_type, output_folder, acquisition_settings):
     # take an image, save it in output_folder (your own place when it is None), never overwrite;
     # position_label is the workflow's name, as given; acquisition_type goes in the file names and metadata
     return True, (files, planes)
@@ -230,13 +249,13 @@ def acquire(self, position_label, acquisition_settings, acquisition_type, output
 
 The call should return when the acquisition is done. Return every saved file and every image plane with its stage position. A workflow then finds its images in the same way on every microscope.
 
-`acquisition_type` is the kind of acquisition in the workflow's run, such as `"overview"`, `"focussing"` or `"targets"`. Put it in your file names (the mock names a file `<acquisition_type>_<position_label>`) and in the metadata you save. `output_folder` is the folder to save in, or `None` for the place set up on the microscope.
+`acquisition_type` is the kind of acquisition in the workflow's run, such as `"overview"`, `"focussing"` or `"targets"`. Put it in your file names (for example `<acquisition_type>_<position_label>`) and in the metadata you save. `output_folder` is the folder to save in, or `None` for the place set up on the microscope.
 
 What a driver receives is fixed by the controller, whichever way the driver is written: `acquisition_type` is always a non-empty text (`"acquisition"` when the workflow gave none) and `output_folder` is always text or `None` (a path the workflow gave is turned into text). The controller fills these in and refuses anything else before your driver is asked, so a driver applies no default of its own and needs nothing from the controller's package. The controller also reports the type in its answer, so you return only `files` and `planes`. When your vendor software always saves in a place of its own, save there and return the real paths; never refuse. Say so in `get_info` with `chooses_its_own_folder`. `check_acquire_answer(answer, output_folder=..., chooses_its_own_folder=...)` checks that every file lies in the folder it was given, unless the driver chooses its own.
 
 Every plane says where on the sample it was taken, in the frame `set_xyz` takes: `x_um` and `y_um` are the centre of the field of view, the stage position, never a corner of the image. A z-stack the microscope makes by itself is described the same way on every microscope: `z_um` is each slice's own height, `z = 0` is the lowest slice and each depth above it is higher, whichever way the microscope moved, and the channels of one slice share its height. `check_acquire_answer` refuses an answer that does not.
 
-A driver that saves OME-Zarr places the image by its translation, and the translation is the centre of the first voxel, as OME-NGFF RFC-5 defines it ("the pixel/voxel center is the origin of the continuous coordinate system"). For a plane taken with its field centred at `x_um`, `nx` pixels of size `p` wide, the x translation is `x_um - nx·p/2 + p/2`, and likewise for y; z is the lowest slice's own height. A coarser level made by averaging 2×2 pixels at level `l` starts at `first centre + (2^l - 1)·p/2`. An OME-TIFF's `PositionX` and `PositionY` are not part of the contract: the mock writes the corner of the frame there, which is half a frame from the centre the answer reports, and nothing in ZMART reads them.
+A driver that saves OME-Zarr places the image by its translation, and the translation is the centre of the first voxel, as OME-NGFF RFC-5 defines it ("the pixel/voxel center is the origin of the continuous coordinate system"). For a plane taken with its field centred at `x_um`, `nx` pixels of size `p` wide, the x translation is `x_um - nx·p/2 + p/2`, and likewise for y; z is the lowest slice's own height. A coarser level made by averaging 2×2 pixels at level `l` starts at `first centre + (2^l - 1)·p/2`. An OME-TIFF's `PositionX` and `PositionY` are not part of the contract, and nothing in ZMART reads them.
 
 <br>
 
@@ -266,7 +285,7 @@ The call should return when the procedure is done. A name that `get_procedures` 
 ### Check your driver
 
 ```python
-mic.validate_driver("C:/drivers/my-scope/zmart_driver.json")   # [] when every method fits
+mic.validate_driver("C:/drivers/my-scope")   # [] when every method fits
 ```
 
 ---

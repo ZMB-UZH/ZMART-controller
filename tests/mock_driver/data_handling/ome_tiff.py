@@ -41,7 +41,7 @@ def ome_xml(
     return (
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<OME xmlns="http://www.openmicroscopy.org/Schemas/OME/2016-06" '
-        f'Creator="zmart_controller.mock" UUID="urn:uuid:{uuid.uuid4()}">'
+        f'Creator="ZMART mock driver" UUID="urn:uuid:{uuid.uuid4()}">'
         f'<Image ID="Image:0" Name={quoteattr(name)}>'
         f'<Pixels ID="Pixels:0" DimensionOrder="XYZCT" Type="uint16" '
         f'SizeX="{width}" SizeY="{height}" SizeZ="1" SizeC="1" SizeT="1" '

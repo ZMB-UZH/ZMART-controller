@@ -12,19 +12,19 @@ To hold several microscopes at once, keep each one::
     left, right = ZmartController("left-scope"), ZmartController("right-scope")
     left.set_xyz(100, 50, 0)
 
-Each method calls the method of the same name on the ``ZmartDriver``, which
-hands back ``True`` and the values, or ``False`` and a message. There are
-three outcomes, and the answer always has the same shape:
+Each method calls the method of the same name on the driver's
+``ZmartControllerPlugin``, handing every value over by name, and the plugin
+hands back ``True`` and the values, or ``False`` and a message. The
+controller writes every answer itself, so it holds exactly what the contract
+says on every microscope. There are three outcomes, and the answer always
+has the same shape:
 
-- success: ``{"success": True, "content": ...}`` with the values;
-- failure, the driver says the microscope did not do it:
-  ``{"success": False, "content": "..."}`` with the driver's message;
+- success: ``{"success": True, "output": ...}`` with the values;
+- failure, the plugin says the microscope did not do it:
+  ``{"success": False, "output": "..."}`` with the plugin's message;
 - call failure, the method itself raised: the same, with the error text.
 
 Every call returns when the driver has finished.
-
-A driver may also be a module with one function per command, such as the
-mock; its functions already build the answers themselves.
 
 Author: Thom de Hoog, Center for Microscopy and Image Analysis (ZMB),
 University of Zurich (thom.dehoog@zmb.uzh.ch, thomdehoog@gmail.com).
@@ -32,7 +32,6 @@ University of Zurich (thom.dehoog@zmb.uzh.ch, thomdehoog@gmail.com).
 
 from __future__ import annotations
 
-from functools import partial
 from os import PathLike
 from typing import Any
 
@@ -44,10 +43,16 @@ DEFAULT_ACQUISITION_TYPE = "acquisition"
 
 
 class ZmartController:
-    """One connected microscope. ``context`` names the driver: ``{"driver": ...}``."""
+    """One connected microscope.
+
+    ``driver`` is the name of an installed driver, a driver loaded with
+    ``load_driver``, a ``ZmartControllerPlugin`` class, or anything that holds
+    one under that name, such as a module. ``context`` names the driver:
+    ``{"driver": ...}``. ``plugin`` is the connected ``ZmartControllerPlugin``.
+    """
 
     def __init__(self, driver: Any, connection: dict[str, Any] | None = None) -> None:
-        from .registry import driver_functions, driver_name, find_driver
+        from .registry import driver_name, find_driver, plugin_class
 
         name = None
         if isinstance(driver, str):
@@ -56,25 +61,13 @@ class ZmartController:
             connection = saved if connection is None else connection
         elif connection is None:
             connection = getattr(driver, "CONNECTION", None)
-        connection = dict(connection or {})
         self.context = {"driver": name or driver_name(driver)}
-
-        driver_class = driver if isinstance(driver, type) else getattr(driver, "ZmartDriver", None)
-        if driver_class is not None:
-            self._handle = driver_class(connection)  # making it connects
-            return
-        # An older driver, a module with one function per command: its
-        # functions answer directly, so they stand in for the methods below.
-        functions = driver_functions(driver)
-        self._handle = functions.pop("connect")(connection)
-        functions["acquire"] = filling_in_acquire(functions["acquire"])
-        for command, function in functions.items():
-            setattr(self, command, _answering(partial(function, self._handle)))
+        self.plugin = plugin_class(driver)(dict(connection or {}))  # making it connects
 
     def disconnect(self) -> None:
-        """Close the connection, if the driver has a way to close it."""
-        if hasattr(self._handle, "disconnect"):
-            self._handle.disconnect()
+        """Close the connection, if the plugin has a way to close it."""
+        if hasattr(self.plugin, "disconnect"):
+            self.plugin.disconnect()
 
     def get_info(self) -> dict:
         """The microscope in plain words, what is set up on it, and whether it chooses its own folder.
@@ -84,19 +77,19 @@ class ZmartController:
         is given; its answers then list where the files really are.
         """
         try:
-            ok, result = self._handle.get_info()
+            ok, result = self.plugin.get_info()
 
         except Exception as error:
-            return {"success": False, "content": f"{type(error).__name__}: {error}"}
+            return {"success": False, "output": f"{type(error).__name__}: {error}"}
 
         if not ok:
-            return {"success": False, "content": result}
+            return {"success": False, "output": result}
 
         description, setup, chooses_its_own_folder = result
 
         return {
             "success": True,
-            "content": {
+            "output": {
                 "description": description,
                 "setup": setup,
                 "chooses_its_own_folder": chooses_its_own_folder,
@@ -110,17 +103,17 @@ class ZmartController:
         The driver decides the default; ``get_xyz`` and ``set_xyz`` both use it.
         """
         try:
-            ok, result = self._handle.get_actuators()
+            ok, result = self.plugin.get_actuators()
 
         except Exception as error:
-            return {"success": False, "content": f"{type(error).__name__}: {error}"}
+            return {"success": False, "output": f"{type(error).__name__}: {error}"}
 
         if not ok:
-            return {"success": False, "content": result}
+            return {"success": False, "output": result}
 
         x, y, z = result
 
-        return {"success": True, "content": {"x": x, "y": y, "z": z}}
+        return {"success": True, "output": {"x": x, "y": y, "z": z}}
 
     def get_xyz(self, with_actuators: dict | None = None) -> dict:
         """Where the stage is. Each axis: ``position``, ``unit``, ``actuator``, ``actuators``, ``canvas``.
@@ -134,15 +127,15 @@ class ZmartController:
         """
         try:
             chosen = chosen_actuators(self.get_actuators(), with_actuators)
-            ok, result = self._handle.get_xyz(chosen)
+            ok, result = self.plugin.get_xyz(with_actuators=chosen)
 
         except Exception as error:
-            return {"success": False, "content": f"{type(error).__name__}: {error}"}
+            return {"success": False, "output": f"{type(error).__name__}: {error}"}
 
         if not ok:
-            return {"success": False, "content": result}
+            return {"success": False, "output": result}
 
-        return {"success": True, "content": _xyz_content(result, chosen)}
+        return {"success": True, "output": xyz_output(result, chosen)}
 
     def set_xyz(self, x: float, y: float, z: float, with_actuators: dict | None = None) -> dict:
         """Move to a position in micrometres from the origin, and answer like ``get_xyz``.
@@ -156,67 +149,67 @@ class ZmartController:
         """
         try:
             chosen = chosen_actuators(self.get_actuators(), with_actuators)
-            ok, result = self._handle.set_xyz(x, y, z, chosen)
+            ok, result = self.plugin.set_xyz(x=x, y=y, z=z, with_actuators=chosen)
 
         except Exception as error:
-            return {"success": False, "content": f"{type(error).__name__}: {error}"}
+            return {"success": False, "output": f"{type(error).__name__}: {error}"}
 
         if not ok:
-            return {"success": False, "content": result}
+            return {"success": False, "output": result}
 
-        return {"success": True, "content": _xyz_content(result, chosen)}
+        return {"success": True, "output": xyz_output(result, chosen)}
 
     def get_state(self) -> dict:
         """The settings: ``changeable``, which ``set_state`` applies, and ``observed``, read-only."""
         try:
-            ok, result = self._handle.get_state()
+            ok, result = self.plugin.get_state()
 
         except Exception as error:
-            return {"success": False, "content": f"{type(error).__name__}: {error}"}
+            return {"success": False, "output": f"{type(error).__name__}: {error}"}
 
         if not ok:
-            return {"success": False, "content": result}
+            return {"success": False, "output": result}
 
         changeable, observed = result
 
-        return {"success": True, "content": {"changeable": changeable, "observed": observed}}
+        return {"success": True, "output": {"changeable": changeable, "observed": observed}}
 
     def set_state(self, state: dict) -> dict:
         """Apply the settings under ``changeable``; the answer names what was applied."""
         try:
-            ok, result = self._handle.set_state(state["changeable"])
+            ok, result = self.plugin.set_state(changeable=state["changeable"])
 
         except Exception as error:
-            return {"success": False, "content": f"{type(error).__name__}: {error}"}
+            return {"success": False, "output": f"{type(error).__name__}: {error}"}
 
         if not ok:
-            return {"success": False, "content": result}
+            return {"success": False, "output": result}
 
         applied = result
 
-        return {"success": True, "content": {"applied": applied}}
+        return {"success": True, "output": {"applied": applied}}
 
     def get_acquisition_settings(self) -> dict:
         """How an acquisition is triggered: ``{name: {"options": ..., "default": ..., "active": ...}}``."""
         try:
-            ok, result = self._handle.get_acquisition_settings()
+            ok, result = self.plugin.get_acquisition_settings()
 
         except Exception as error:
-            return {"success": False, "content": f"{type(error).__name__}: {error}"}
+            return {"success": False, "output": f"{type(error).__name__}: {error}"}
 
         if not ok:
-            return {"success": False, "content": result}
+            return {"success": False, "output": result}
 
         settings = result
 
-        return {"success": True, "content": settings}
+        return {"success": True, "output": settings}
 
     def acquire(
         self,
         position_label: str,
-        acquisition_settings: dict | None = None,
         acquisition_type: str | None = None,
         output_folder: str | PathLike | None = None,
+        acquisition_settings: dict | None = None,
     ) -> dict:
         """Capture an image here and save it; the answer lists every file and image plane.
 
@@ -228,25 +221,30 @@ class ZmartController:
         where it was set up to. A microscope whose software always saves in
         its own place saves there instead and says so in ``get_info``; the
         answer always lists where the files really are.
+        ``acquisition_settings`` says how to trigger the acquisition; left
+        out, the plugin uses the ``active`` value of each setting.
         """
         try:
             acquisition_type = acquisition_type_or_default(acquisition_type)
             output_folder = output_folder_as_text(output_folder)
-            ok, result = self._handle.acquire(
-                position_label, acquisition_settings, acquisition_type, output_folder
+            ok, result = self.plugin.acquire(
+                position_label=position_label,
+                acquisition_type=acquisition_type,
+                output_folder=output_folder,
+                acquisition_settings=acquisition_settings,
             )
 
         except Exception as error:
-            return {"success": False, "content": f"{type(error).__name__}: {error}"}
+            return {"success": False, "output": f"{type(error).__name__}: {error}"}
 
         if not ok:
-            return {"success": False, "content": result}
+            return {"success": False, "output": result}
 
         files, planes = result
 
         return {
             "success": True,
-            "content": {
+            "output": {
                 "position_label": position_label,
                 "acquisition_type": acquisition_type,
                 "files": files,
@@ -257,32 +255,32 @@ class ZmartController:
     def get_procedures(self) -> dict:
         """The routines the microscope offers: ``{name: {"description": ...}}``."""
         try:
-            ok, result = self._handle.get_procedures()
+            ok, result = self.plugin.get_procedures()
 
         except Exception as error:
-            return {"success": False, "content": f"{type(error).__name__}: {error}"}
+            return {"success": False, "output": f"{type(error).__name__}: {error}"}
 
         if not ok:
-            return {"success": False, "content": result}
+            return {"success": False, "output": result}
 
         procedures = result
 
-        return {"success": True, "content": procedures}
+        return {"success": True, "output": procedures}
 
     def run_procedure(self, procedure: dict) -> dict:
         """Run the routine named by ``procedure["name"]``; the other keys are its arguments."""
         try:
-            ok, result = self._handle.run_procedure(procedure)
+            ok, result = self.plugin.run_procedure(procedure=procedure)
 
         except Exception as error:
-            return {"success": False, "content": f"{type(error).__name__}: {error}"}
+            return {"success": False, "output": f"{type(error).__name__}: {error}"}
 
         if not ok:
-            return {"success": False, "content": result}
+            return {"success": False, "output": result}
 
         ran = result
 
-        return {"success": True, "content": {"ran": ran}}
+        return {"success": True, "output": {"ran": ran}}
 
 
 def chosen_actuators(offered: dict, with_actuators: dict | None) -> dict[str, str]:
@@ -295,8 +293,8 @@ def chosen_actuators(offered: dict, with_actuators: dict | None) -> dict[str, st
     ``RuntimeError`` when the driver could not say which motors it has.
     """
     if not offered["success"]:
-        raise RuntimeError(f"the driver could not list its actuators: {offered['content']}")
-    motors = offered["content"]
+        raise RuntimeError(f"the driver could not list its actuators: {offered['output']}")
+    motors = offered["output"]
     chosen = {axis: motors[axis]["default"] for axis in ("x", "y", "z")}
     for axis, name in (with_actuators or {}).items():
         if axis not in chosen:
@@ -338,38 +336,10 @@ def output_folder_as_text(output_folder: str | PathLike | None) -> str | None:
     return str(output_folder)
 
 
-def filling_in_acquire(acquire):
-    """A module driver's ``acquire``, given what the controller fills in for every driver.
+def xyz_output(result, chosen: dict[str, str]) -> dict:
+    """Build the answer of ``get_xyz`` and ``set_xyz`` from what the plugin hands back.
 
-    A driver that is a module answers for itself, so the controller cannot
-    build its answer; it still fills in its parameters, as ``ZmartController.acquire``
-    does for a ``ZmartDriver``: every driver receives a non-empty
-    ``acquisition_type`` and ``output_folder`` as text or None, and never
-    applies a default of its own.
-    """
-
-    def filled_in(
-        handle,
-        position_label,
-        acquisition_settings=None,
-        acquisition_type=None,
-        output_folder=None,
-    ):
-        return acquire(
-            handle,
-            position_label=position_label,
-            acquisition_settings=acquisition_settings,
-            acquisition_type=acquisition_type_or_default(acquisition_type),
-            output_folder=output_folder_as_text(output_folder),
-        )
-
-    return filled_in
-
-
-def _xyz_content(result, chosen: dict[str, str]) -> dict:
-    """Build the answer of ``get_xyz`` and ``set_xyz`` from what the driver hands back.
-
-    The driver returns ``(x, y, z, actuators, canvas)``: the position in
+    The plugin returns ``(x, y, z, actuators, canvas)``: the position in
     micrometres from the origin, the raw reading of every motor per axis
     (``{"x": {...}, "y": {...}, "z": {...}}``), and the canvas
     ``(x_min, x_max, y_min, y_max, z_min, z_max)``. Every number is in
@@ -395,20 +365,8 @@ def _xyz_content(result, chosen: dict[str, str]) -> dict:
     }
 
 
-def _answering(function):
-    """Give a module driver's function the same three outcomes as the methods above."""
-
-    def answer(*args, **kwargs):
-        try:
-            return function(*args, **kwargs)
-        except Exception as error:
-            return {"success": False, "content": f"{type(error).__name__}: {error}"}
-
-    return answer
-
-
-#: The commands: the public methods of the controller. A ZmartDriver has a
-#: method for each, a module driver a function. disconnect is optional.
+#: The commands: the public methods of the controller. A ZmartControllerPlugin
+#: has a method of the same name for each; disconnect is optional.
 COMMANDS = tuple(name for name, value in vars(ZmartController).items() if not name.startswith("_"))
 
 
@@ -449,7 +407,7 @@ class Mic:
 
     @staticmethod
     def register_driver(where) -> str:
-        """Install a driver on this computer: point at its ``zmart_driver.json``. Returns its name."""
+        """Install a driver on this computer: point at its folder. Returns its name."""
         from .registry import register_driver
 
         return register_driver(where)

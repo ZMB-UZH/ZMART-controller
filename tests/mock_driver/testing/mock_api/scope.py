@@ -1,8 +1,7 @@
 """MockScope Control: pretend vendor software for a pretend microscope.
 
-A ZMART driver is built on top of the software that comes with a microscope:
-LAS X for Leica, NIS-Elements for Nikon, ZEN for ZEISS. This module plays
-that role for the mock microscope. It is the *mock API* from the driver
+A ZMART driver is built on top of the software that comes with a
+microscope. This module plays that role for the mock microscope. It is the *mock API* from the driver
 anatomy: the stand-in at the very bottom of a driver, below the vendor
 interface, so that every part above it can be built and tested on a laptop.
 
@@ -39,7 +38,7 @@ fast tests, pass a :class:`FakeClock` and move time forward yourself with
 
 A short example::
 
-    from zmart_controller.mock.testing.mock_api import FakeClock, MockScope
+    from mock_driver.testing.mock_api import FakeClock, MockScope
 
     clock = FakeClock()
     scope = MockScope(output_folder="images", clock=clock)

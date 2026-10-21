@@ -1,10 +1,11 @@
-"""The code that talks to your microscope's vendor software. Fill in every method.
+"""Your driver's controller plugin: the class the controller makes when it connects. Fill in every method.
 
-The controller creates one ``ZmartDriver`` when it connects and calls the
-method of the same name for every command. Each method hands back a pair:
-``True`` and the values when the microscope did what was asked, or
-``False`` and a message when it did not. The controller turns that into the
-answer the workflow sees. A method that raises is reported with the error
+The controller creates one ``ZmartControllerPlugin`` when it connects and
+calls the method of the same name for every command, handing every value
+over by name, so each parameter must keep the name it has here. Each method
+hands back a pair: ``True`` and the values when the microscope did what was
+asked, or ``False`` and a message when it did not. The controller turns that
+into the answer the workflow sees. A method that raises is reported with the error
 text, so raise ``ValueError`` for a request that is wrong, such as a
 position outside the travel or an unknown setting.
 
@@ -15,21 +16,21 @@ below raises ``NotImplementedError`` until you write it, so
 """
 
 
-class ZmartDriver:
+class ZmartControllerPlugin:
     """One connected microscope: the vendor connection and everything to drive it."""
 
     def __init__(self, connection):
         """Open the connection to the vendor software and keep what you need on ``self``.
 
-        ``connection`` is the dictionary from ``zmart_driver.json``: which
+        ``connection`` is the dictionary from ``zmart_controller_plugin.json``: which
         microscope, how its software is reached, where it listens, its
         password, and its configuration file.
         """
-        raise NotImplementedError("ZmartDriver.__init__: open the connection")
+        raise NotImplementedError("ZmartControllerPlugin.__init__: open the connection")
 
     def disconnect(self):
         """Close the connection to the vendor software."""
-        raise NotImplementedError("ZmartDriver.disconnect: close the connection")
+        raise NotImplementedError("ZmartControllerPlugin.disconnect: close the connection")
 
     def get_info(self):
         """Return ``True, (description, setup, chooses_its_own_folder)``.
@@ -46,7 +47,7 @@ class ZmartDriver:
         of its own; say where in ``setup``.
         """
         raise NotImplementedError(
-            "ZmartDriver.get_info: return True, (description, setup, chooses_its_own_folder)"
+            "ZmartControllerPlugin.get_info: return True, (description, setup, chooses_its_own_folder)"
         )
 
     def get_actuators(self):
@@ -57,7 +58,7 @@ class ZmartDriver:
         decide it, and the controller uses it for ``get_xyz`` and
         ``set_xyz`` alike.
         """
-        raise NotImplementedError("ZmartDriver.get_actuators: return True, (x, y, z)")
+        raise NotImplementedError("ZmartControllerPlugin.get_actuators: return True, (x, y, z)")
 
     def get_xyz(self, with_actuators):
         """Return ``True, (x, y, z, actuators, canvas)``, everything in micrometres.
@@ -74,7 +75,9 @@ class ZmartDriver:
         ``{"x": "motoric", "y": "motoric", "z": "piezo"}``: the controller has
         already filled in your defaults and refused a motor you do not list.
         """
-        raise NotImplementedError("ZmartDriver.get_xyz: return True, (x, y, z, actuators, canvas)")
+        raise NotImplementedError(
+            "ZmartControllerPlugin.get_xyz: return True, (x, y, z, actuators, canvas)"
+        )
 
     def set_xyz(self, x, y, z, with_actuators):
         """Move the stage, then return what ``get_xyz`` returns, or ``False, message``.
@@ -88,7 +91,9 @@ class ZmartDriver:
         stage never arrives, return ``False`` and say where it is, so the
         workflow can stop.
         """
-        raise NotImplementedError("ZmartDriver.set_xyz: move, then return what get_xyz returns")
+        raise NotImplementedError(
+            "ZmartControllerPlugin.set_xyz: move, then return what get_xyz returns"
+        )
 
     def get_state(self):
         """Return ``True, (changeable, observed)``: two dictionaries.
@@ -97,7 +102,9 @@ class ZmartDriver:
         exposure time. ``observed`` holds what can only be read, such as the
         objective in place.
         """
-        raise NotImplementedError("ZmartDriver.get_state: return True, (changeable, observed)")
+        raise NotImplementedError(
+            "ZmartControllerPlugin.get_state: return True, (changeable, observed)"
+        )
 
     def set_state(self, changeable):
         """Apply each setting and return ``True, applied``, or ``False, message``.
@@ -106,7 +113,9 @@ class ZmartDriver:
         each setting back; when one did not take, return ``False`` and say
         which.
         """
-        raise NotImplementedError("ZmartDriver.set_state: apply the settings, return True, applied")
+        raise NotImplementedError(
+            "ZmartControllerPlugin.set_state: apply the settings, return True, applied"
+        )
 
     def get_acquisition_settings(self):
         """Return ``True, settings``: how an acquisition can be triggered.
@@ -128,9 +137,11 @@ class ZmartDriver:
         the setting is left out of ``acquire``; when it differs from
         ``default``, something chose another value, for example this session.
         """
-        raise NotImplementedError("ZmartDriver.get_acquisition_settings: return True, settings")
+        raise NotImplementedError(
+            "ZmartControllerPlugin.get_acquisition_settings: return True, settings"
+        )
 
-    def acquire(self, position_label, acquisition_settings, acquisition_type, output_folder):
+    def acquire(self, position_label, acquisition_type, output_folder, acquisition_settings):
         """Capture here, save, and return ``True, (files, planes)``, or ``False, message``.
 
         ``position_label`` is the workflow's name for this capture, handed on
@@ -153,12 +164,12 @@ class ZmartDriver:
         appears, return ``False`` and say so.
         """
         raise NotImplementedError(
-            "ZmartDriver.acquire: capture, save, then return True, (files, planes)"
+            "ZmartControllerPlugin.acquire: capture, save, then return True, (files, planes)"
         )
 
     def get_procedures(self):
         """Return ``True, procedures``: ``{name: {"description": ...}}``, the routines offered."""
-        raise NotImplementedError("ZmartDriver.get_procedures: return True, procedures")
+        raise NotImplementedError("ZmartControllerPlugin.get_procedures: return True, procedures")
 
     def run_procedure(self, procedure):
         """Run the routine named by ``procedure["name"]`` and return ``True, name``, or ``False, message``.
@@ -166,4 +177,6 @@ class ZmartDriver:
         The other keys of ``procedure`` are its arguments. Raise
         ``ValueError`` for a name that ``get_procedures`` does not list.
         """
-        raise NotImplementedError("ZmartDriver.run_procedure: run it, then return True, name")
+        raise NotImplementedError(
+            "ZmartControllerPlugin.run_procedure: run it, then return True, name"
+        )

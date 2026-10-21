@@ -1,11 +1,13 @@
 """The registry: the drivers installed on this computer, and the folder ZMART keeps its files in.
 
-A driver is two files: ``zmart_driver.json``, its name and how to reach the
-microscope, and the class file it names, with a ``ZmartDriver`` class (or,
-for an older driver, one function per command). :func:`load_driver` reads
-them. :func:`register_driver` writes the JSON's path into this computer's
-list, :func:`registry_file`, so that every Python session
-can connect by name. :func:`get_instruments` shows the list.
+A driver is a folder. Its plugin, the part the controller talks to, is
+always in the driver's ``zmart_controller_plugin/`` folder, as two files:
+``zmart_controller_plugin.json``, the driver's name and how to reach the
+microscope, and ``zmart_controller_plugin.py``, the ``ZmartControllerPlugin``
+class. :func:`load_driver` reads them. :func:`register_driver` writes the
+driver's folder into this computer's list, :func:`registry_file`, so that
+every Python session can connect by name. :func:`get_instruments` shows the
+list.
 
 Author: Thom de Hoog, Center for Microscopy and Image Analysis (ZMB),
 University of Zurich (thom.dehoog@zmb.uzh.ch, thomdehoog@gmail.com).
@@ -23,10 +25,20 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from .zmart_controller import COMMANDS
+#: The folder inside every driver that holds its plugin.
+PLUGIN_FOLDER = "zmart_controller_plugin"
 
-SETTINGS_FILE = "zmart_driver.json"
-MOCK = "mock"
+#: The plugin's settings: the driver's ``name`` and its ``connection``, nothing else.
+SETTINGS_FILE = "zmart_controller_plugin.json"
+
+#: The plugin's code, which holds :data:`PLUGIN_CLASS`.
+PLUGIN_FILE = "zmart_controller_plugin.py"
+
+#: The class the controller makes when it connects.
+PLUGIN_CLASS = "ZmartControllerPlugin"
+
+#: What the settings file may hold.
+SETTINGS_KEYS = ("name", "connection")
 
 
 def config_root() -> Path:
@@ -52,15 +64,16 @@ def registry_file() -> Path:
     return config_root() / "zmart-controller" / "drivers.json"
 
 
-def _installed() -> dict[str, str]:
-    """The installed drivers: name -> path of its zmart_driver.json."""
+def installed_drivers() -> dict[str, str]:
+    """The installed drivers: name -> the driver's folder."""
     try:
         return json.loads(registry_file().read_text())
     except FileNotFoundError:
         return {}
 
 
-def _save(installed: dict[str, str]) -> None:
+def save_installed_drivers(installed: dict[str, str]) -> None:
+    """Write the list of installed drivers."""
     registry_file().parent.mkdir(parents=True, exist_ok=True)
     registry_file().write_text(json.dumps(installed, indent=2) + "\n")
 
@@ -68,13 +81,13 @@ def _save(installed: dict[str, str]) -> None:
 def get_instruments() -> dict[str, dict[str, Any]]:
     """Every installed driver by name, with how it connects. Passwords and tokens are left out.
 
-    The mock is always first. A driver that can no longer be loaded shows
-    ``{"error": ...}`` instead, so one broken driver never hides the others.
+    A driver that can no longer be loaded shows ``{"error": ...}`` instead,
+    so one broken driver never hides the others.
     """
-    instruments: dict[str, dict[str, Any]] = {MOCK: {}}
-    for name, settings in sorted(_installed().items()):
+    instruments: dict[str, dict[str, Any]] = {}
+    for name, folder in sorted(installed_drivers().items()):
         try:
-            connection = load_driver(settings).CONNECTION
+            connection = load_driver(registered_folder(name, folder)).CONNECTION
         except Exception as error:
             instruments[name] = {"error": f"{type(error).__name__}: {error}"}
             continue
@@ -87,86 +100,117 @@ def get_instruments() -> dict[str, dict[str, Any]]:
 
 
 def register_driver(where: str | Path) -> str:
-    """Install a driver on this computer: point at its ``zmart_driver.json``, or its folder.
+    """Install a driver on this computer: point at the driver's folder. Returns its name.
 
+    The driver's folder is the one that holds ``zmart_controller_plugin/``.
     The driver is loaded first, so one that is missing something is refused
     with a message that says what, and nothing is written. Installing a
-    driver again replaces its entry. Returns its name.
+    driver again replaces its entry.
     """
-    settings = Path(where).resolve()
-    if settings.is_dir():
-        settings = settings / SETTINGS_FILE
-    driver = load_driver(settings)
-    if driver.NAME == MOCK:
-        raise ValueError(f"{MOCK!r} is the mock driver's name; choose another name in {settings}")
-    _save({**_installed(), driver.NAME: str(settings)})
+    folder = driver_folder(where)
+    driver = load_driver(folder)
+    save_installed_drivers({**installed_drivers(), driver.NAME: str(folder)})
     return driver.NAME
 
 
 def remove_driver(name: str) -> bool:
     """Take ``name`` off the list of installed drivers. Returns False if it was not there."""
-    installed = _installed()
+    installed = installed_drivers()
     if name not in installed:
         return False
     del installed[name]
-    _save(installed)
+    save_installed_drivers(installed)
     return True
 
 
 def find_driver(name: str) -> tuple[Any, dict[str, Any]]:
     """The driver installed as ``name``, loaded, and its connection."""
-    if name == MOCK:
-        return importlib.import_module("zmart_controller.mock"), {}
-    if name not in _installed():
-        raise ValueError(f"no driver installed as {name!r}; installed: {list(get_instruments())}")
-    driver = load_driver(_installed()[name])
+    installed = installed_drivers()
+    if name not in installed:
+        raise ValueError(f"no driver installed as {name!r}; installed: {sorted(installed)}")
+    driver = load_driver(registered_folder(name, installed[name]))
     return driver, dict(driver.CONNECTION)
 
 
-def load_driver(where: str | Path) -> SimpleNamespace:
-    """The driver at ``where``, its ``zmart_driver.json`` or its folder, ready to hand to the controller.
+def registered_folder(name: str, where: str) -> str:
+    """The folder ``name`` was registered from; refuses an entry an older controller wrote.
 
-    Reads the name, the connection and the class file (``driver``, relative
-    to the JSON's folder) and imports that file. It must hold a
-    ``ZmartDriver`` class, or one function per command. Returns an object
-    with ``NAME``, ``CONNECTION`` and either ``ZmartDriver`` or the
-    functions. Raises ``ValueError`` naming what is missing.
+    An older controller kept the path of a settings file; such an entry is
+    registered again from the driver's folder.
     """
-    settings_file = Path(where).resolve()
-    if settings_file.is_dir():
-        settings_file = settings_file / SETTINGS_FILE
+    if not Path(where).is_dir():
+        raise ValueError(
+            f"{name!r} was registered from {where}, which is not a driver's folder; "
+            "register the driver's folder again"
+        )
+    return where
+
+
+def driver_folder(where: str | Path) -> Path:
+    """The driver's folder ``where`` names, the one holding ``zmart_controller_plugin/``.
+
+    Raises ``ValueError`` that says where the plugin belongs, for a file, for
+    the plugin folder itself, or for a folder without one.
+    """
+    folder = Path(where).resolve()
+    rule = f"a driver is given by the driver's folder, the one that holds {PLUGIN_FOLDER}/"
+    if folder.is_file():
+        raise ValueError(f"{rule}; {folder} is a file")
+    if folder.name == PLUGIN_FOLDER:
+        raise ValueError(f"{rule}; {folder} is the plugin folder itself, give {folder.parent}")
+    if not (folder / PLUGIN_FOLDER).is_dir():
+        raise ValueError(f"{rule}; {folder} has no {PLUGIN_FOLDER}/ folder")
+    return folder
+
+
+def load_driver(where: str | Path) -> SimpleNamespace:
+    """The driver in the folder ``where``, ready to hand to the controller.
+
+    Reads the name and the connection from ``zmart_controller_plugin.json``
+    and imports ``zmart_controller_plugin.py``, which must hold a
+    ``ZmartControllerPlugin`` class. Returns an object with ``NAME``,
+    ``CONNECTION`` and ``ZmartControllerPlugin``. Raises ``ValueError``
+    naming what is missing.
+    """
+    folder = driver_folder(where)
+    settings_file = folder / PLUGIN_FOLDER / SETTINGS_FILE
     if not settings_file.is_file():
         raise ValueError(
-            f"a driver is installed from its {SETTINGS_FILE}; {settings_file} is missing"
+            f"the driver's settings are in {SETTINGS_FILE}; {settings_file} is missing"
         )
     settings = json.loads(settings_file.read_text())
+    extra = sorted(set(settings) - set(SETTINGS_KEYS))
+    if extra:
+        raise ValueError(f"{settings_file} holds only 'name' and 'connection', not {extra}")
     name = settings.get("name")
     if not isinstance(name, str) or not name.strip():
         raise ValueError(f'{settings_file} must give the driver\'s "name"')
-    driver_file = (settings_file.parent / settings.get("driver", "zmart_driver.py")).resolve()
-    if not driver_file.is_file():
-        raise ValueError(f'{settings_file} names the class file "driver": {driver_file} is missing')
-    module = _import(driver_file)
-    driver = SimpleNamespace(
-        __name__=name, NAME=name, CONNECTION=dict(settings.get("connection") or {})
+    plugin_file = folder / PLUGIN_FOLDER / PLUGIN_FILE
+    if not plugin_file.is_file():
+        raise ValueError(f"the driver's plugin is {PLUGIN_FILE}; {plugin_file} is missing")
+    found = getattr(import_plugin(folder), PLUGIN_CLASS, None)
+    if not isinstance(found, type):
+        raise ValueError(f"{plugin_file} must hold a {PLUGIN_CLASS} class")
+    return SimpleNamespace(
+        __name__=name,
+        NAME=name,
+        CONNECTION=dict(settings.get("connection") or {}),
+        ZmartControllerPlugin=found,
     )
-    if isinstance(getattr(module, "ZmartDriver", None), type):
-        driver.ZmartDriver = module.ZmartDriver
-    else:
-        vars(driver).update(driver_functions(module))  # an older driver: one function per command
-    return driver
 
 
-def driver_functions(driver: Any) -> dict[str, Any]:
-    """The functions of an older driver, one per command, found by name on a module.
+def plugin_class(driver: Any) -> type:
+    """The ``ZmartControllerPlugin`` class of ``driver``: the class itself, or the one it holds.
 
-    Raises ``ValueError`` naming every missing function.
+    Raises ``ValueError`` for anything else, such as a module of functions.
     """
-    functions = {name: getattr(driver, name, None) for name in ("connect", *COMMANDS)}
-    missing = [name for name, f in functions.items() if name != "disconnect" and not callable(f)]
-    if missing:
-        raise ValueError(f"driver {driver_name(driver)} is missing functions: {missing}")
-    return {name: f for name, f in functions.items() if f is not None}
+    found = driver if isinstance(driver, type) else getattr(driver, PLUGIN_CLASS, None)
+    if not isinstance(found, type):
+        raise ValueError(
+            f"{driver_name(driver)} is not a driver the controller can use: a driver's plugin "
+            f"is a {PLUGIN_CLASS} class, in {PLUGIN_FOLDER}/{PLUGIN_FILE}"
+        )
+    return found
 
 
 def driver_name(driver: Any) -> str:
@@ -174,20 +218,34 @@ def driver_name(driver: Any) -> str:
     return getattr(driver, "__name__", None) or type(driver).__name__
 
 
-def _import(file: Path):
-    """Import a driver's class file. Inside a package it is imported as part of it, so its
-    own imports work; in a plain folder it is imported by path."""
-    parts, folder = [file.stem], file.parent
-    while (folder / "__init__.py").is_file():
-        parts.insert(0, folder.name)
-        folder = folder.parent
+def import_plugin(folder: Path):
+    """Import the plugin of the driver in ``folder`` as part of the driver, so it can use its code.
+
+    The plugin folder needs no ``__init__.py``. A driver that is a package
+    is imported as one, with the plugin as its ``zmart_controller_plugin``
+    part, so the plugin's relative imports reach the driver's code; a copy
+    of the same package imported earlier from another place is forgotten
+    first, so the driver registered last is the one that runs. A driver in a
+    plain folder has its plugin imported by path, with the driver's folder
+    importable, so the plugin can import the driver's modules by name.
+    """
+    importlib.invalidate_caches()
+    stem = Path(PLUGIN_FILE).stem
+    if (folder / "__init__.py").is_file():
+        parts, top = [folder.name], folder.parent
+        while (top / "__init__.py").is_file():
+            parts.insert(0, top.name)
+            top = top.parent
+        forget_a_copy_from_elsewhere(parts[0], top)
+        if str(top) not in sys.path:
+            sys.path.insert(0, str(top))
+        return importlib.import_module(".".join([*parts, PLUGIN_FOLDER, stem]))
     if str(folder) not in sys.path:
         sys.path.insert(0, str(folder))
-    if len(parts) > 1:
-        return importlib.import_module(".".join(parts))
-    name = "zmart_driver_" + "".join(c if c.isalnum() else "_" for c in str(file))
+    plugin_file = folder / PLUGIN_FOLDER / PLUGIN_FILE
+    name = "zmart_controller_plugin_" + "".join(c if c.isalnum() else "_" for c in str(plugin_file))
     if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, file)
+        spec = importlib.util.spec_from_file_location(name, plugin_file)
         module = importlib.util.module_from_spec(spec)
         sys.modules[name] = module
         try:
@@ -196,3 +254,21 @@ def _import(file: Path):
             del sys.modules[name]  # so a fixed file is read again next time
             raise
     return sys.modules[name]
+
+
+def forget_a_copy_from_elsewhere(package: str, top: Path) -> None:
+    """Forget ``package`` and its parts when they were imported from somewhere other than ``top``.
+
+    The package then comes from ``top``, which goes first on ``sys.path``.
+    """
+    loaded = sys.modules.get(package)
+    if loaded is None:
+        return
+    places = [Path(place).resolve() for place in getattr(loaded, "__path__", [])]
+    if places and all(place.parent == top.resolve() for place in places):
+        return
+    for name in [name for name in sys.modules if name == package or name.startswith(package + ".")]:
+        del sys.modules[name]
+    if str(top) in sys.path:
+        sys.path.remove(str(top))
+    sys.path.insert(0, str(top))
