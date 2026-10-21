@@ -85,7 +85,7 @@ class ZmartControllerPlugin:
 
 
 def xyz_values(reading: dict) -> tuple:
-    """``(x, y, z, actuators, canvas)``, the values the controller builds ``get_xyz`` from."""
-    actuators = {axis: dict(reading[axis]["actuators"]) for axis in AXES}
+    """``(x, y, z, actuator_readings, canvas)``, the values the controller builds ``get_xyz`` from."""
+    readings = {axis: dict(reading[axis]["actuator_readings"]) for axis in AXES}
     canvas = tuple(end for axis in AXES for end in reading[axis]["canvas"])
-    return (*(reading[axis]["position"] for axis in AXES), actuators, canvas)
+    return (*(reading[axis]["position"] for axis in AXES), readings, canvas)

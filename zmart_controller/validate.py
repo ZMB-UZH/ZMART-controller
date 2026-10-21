@@ -181,8 +181,8 @@ def _check_xyz(output, problems):
 
     The controller writes the answer's shape, the unit and the motor each
     axis used. The plugin gives, per axis, ``position``, a number of
-    micrometres from the origin; ``actuators``, every motor of the axis with
-    its own raw reading as a number, the motor used among them; and
+    micrometres from the origin; ``actuator_readings``, every motor of the
+    axis with its own reading as a number, the motor used among them; and
     ``canvas``, everywhere a picture can show, as [min, max].
     """
     if not isinstance(output, dict):
@@ -193,17 +193,18 @@ def _check_xyz(output, problems):
         if not _is_number(reading["position"]):
             problems.append(f"get_xyz: axis {axis!r} position must be a number, in micrometres")
         found = len(problems)
-        _check_readings(axis, reading["actuators"], problems)
-        if len(problems) == found and reading["actuator"] not in reading["actuators"]:
+        _check_readings(axis, reading["actuator_readings"], problems)
+        used = reading["used_actuator"]
+        if len(problems) == found and used not in reading["actuator_readings"]:
             problems.append(
-                f"get_xyz: axis {axis!r} actuator {reading['actuator']!r} must be one of "
-                f"the motors it reads, {list(reading['actuators'])}"
+                f"get_xyz: axis {axis!r} used_actuator {used!r} must be one of its "
+                f"actuator_readings, {list(reading['actuator_readings'])}"
             )
         _check_canvas(axis, reading["canvas"], problems)
 
 
 def _check_readings(axis, readings, problems):
-    """Check one axis's ``actuators``: each motor by name, with its raw reading as a number."""
+    """Check one axis's ``actuator_readings``: each motor by name, with its reading as a number."""
     if not (
         isinstance(readings, dict)
         and readings
@@ -211,8 +212,8 @@ def _check_readings(axis, readings, problems):
         and all(_is_number(value) for value in readings.values())
     ):
         problems.append(
-            f"get_xyz: axis {axis!r} actuators must name every motor of the axis "
-            f"with its raw reading as a number, in micrometres"
+            f"get_xyz: axis {axis!r} actuator_readings must name every motor of the axis "
+            f"with its reading as a number, in micrometres"
         )
 
 

@@ -115,14 +115,30 @@ that it was applied. A setting the microscope does not have is a failure.
 
 ### Per call
 
+For each method, **Input** is what the controller hands your method, with
+its type, and says whether the controller has already checked it. **Return**
+is what your method gives back when it works, with the type of every value.
+When it does not work, every method returns `False, str`: the error message.
+
+`number` means an `int` or a `float`; `True` and `False` are not numbers.
+Every number that is a length is in micrometres.
+
 <br>
 
 #### `__init__`
 
 ```python
-def __init__(self, connection):     # connection: the dict from zmart_controller_plugin.json
+def __init__(self, connection):
     # open the vendor software; load the origin, travel limits and calibration
 ```
+
+**Input**
+
+| Name | Type | What it is |
+|---|---|---|
+| `connection` | `dict` | A copy of the `connection` from `zmart_controller_plugin.json`, or the dictionary the workflow gave to `connect` instead. Not checked: the keys are yours to choose, and `{}` when there is none. |
+
+**Return:** nothing. Raise an error when the microscope cannot be reached.
 
 The controller calls this once, when you connect. Load here everything a later command needs, so that each command can work in the sample's coordinate system.
 
@@ -135,7 +151,9 @@ def disconnect(self):
     # close the vendor software
 ```
 
-Close cleanly, so that the vendor software can be opened again.
+**Input:** none. **Return:** nothing.
+
+Close cleanly, so that the vendor software can be opened again. This method is optional.
 
 <br>
 
@@ -144,10 +162,20 @@ Close cleanly, so that the vendor software can be opened again.
 ```python
 def get_info(self):
     return True, (description, setup, chooses_its_own_folder)
-    # description             str: the settings, their units and limits, the objectives, which way +z points
-    # setup                   {item: {"done": bool, "says": str}}: each thing set up once on this microscope; {} if none
-    # chooses_its_own_folder  False: acquire saves in the output_folder it is given; True: the software always saves in its own place
 ```
+
+**Input:** none.
+
+**Return:** `True, (description, setup, chooses_its_own_folder)`
+
+| Name | Type | What it is |
+|---|---|---|
+| `description` | `str`, not empty | The settings, their units and limits, the objectives, which way +z points. |
+| `setup` | `dict[str, dict]`: each value `{"done": bool, "says": str}` | Each thing set up once on this microscope; `{}` when there is none. `says` is not empty. |
+| `chooses_its_own_folder` | `bool` | `False`: `acquire` saves in the `output_folder` it is given. `True`: the software always saves in its own place. |
+
+The answer the workflow sees has exactly these three keys, so the
+description is where everything else about your microscope goes.
 
 The description is what a person or an AI agent reads to understand your microscope. Write what the other commands cannot tell.
 
@@ -162,24 +190,43 @@ The description is what a person or an AI agent reads to understand your microsc
 ```python
 def get_actuators(self):
     return True, (x, y, z)
-    # each axis    {"options": ["motoric", "piezo"], "default": "motoric"}
 ```
 
-`options` lists the motors that move the axis. `default` is the one used when a command does not choose: you decide it, and the controller uses it for `get_xyz` and `set_xyz` alike.
+**Input:** none.
+
+**Return:** `True, (x, y, z)`, one `dict` per axis:
+
+| Key | Type | What it is |
+|---|---|---|
+| `options` | `list[str]`, at least one | The motors that move the axis, for example `["motoric", "piezo"]`. |
+| `default` | `str`, one of `options` | The motor used when a command does not choose. |
+
+You decide the default, and the controller uses it for `get_xyz` and `set_xyz` alike.
 
 <br>
 
 #### `get_xyz`
 
 ```python
-def get_xyz(self, with_actuators):              # {"x": "motoric", "y": "motoric", "z": "piezo"}
-    return True, (x, y, z, actuators, canvas)
-    # x, y, z      micrometres from the origin
-    # actuators    {"x": {"motoric": 50000.0}, "y": {...}, "z": {"motoric": 5000.0, "piezo": 0.0}}   raw readings
-    # canvas       (x_min, x_max, y_min, y_max, z_min, z_max)   travel plus half a field of view
+def get_xyz(self, with_actuators):
+    return True, (x, y, z, actuator_readings, canvas)
 ```
 
-`with_actuators` names a motor for every axis: the controller has filled in your defaults and refused a motor you do not list, and it tells the workflow which motor was used. Positions are in the sample's coordinate system. The raw readings are reported as the microscope gives them, with nothing subtracted or converted.
+**Input**
+
+| Name | Type | What it is |
+|---|---|---|
+| `with_actuators` | `dict[str, str]` | One motor for every axis, for example `{"x": "motoric", "y": "motoric", "z": "piezo"}`. Checked: always the keys `"x"`, `"y"` and `"z"`, each one of that axis's `options`; the controller has filled in your defaults. |
+
+**Return:** `True, (x, y, z, actuator_readings, canvas)`
+
+| Name | Type | What it is |
+|---|---|---|
+| `x`, `y`, `z` | `number` each | The position in micrometres from the origin, in the sample's coordinate system. x and y are the centre of the field of view. |
+| `actuator_readings` | `dict[str, dict[str, number]]` | For each of `"x"`, `"y"` and `"z"`, every motor of that axis with its own reading, for example `{"x": {"motoric": 50000.0}, "y": {"motoric": 37500.0}, "z": {"motoric": 5000.0, "piezo": 0.0}}`. The motor in `with_actuators` must be among them. |
+| `canvas` | `tuple` of 6 `number`s | `(x_min, x_max, y_min, y_max, z_min, z_max)`, micrometres from the origin: the travel plus half a field of view. No min is larger than its max. |
+
+The controller tells the workflow which motor was used, as `used_actuator`. The readings are reported as the microscope gives them, in micrometres from each motor's own zero, with no origin subtracted.
 
 <br>
 
@@ -189,10 +236,18 @@ def get_xyz(self, with_actuators):              # {"x": "motoric", "y": "motoric
 def set_xyz(self, x, y, z, with_actuators):
     # check the limits, move, wait until arrived
     return self.get_xyz(with_actuators)
-    return False, "<error message>"             # outside the limits, or never arrived
 ```
 
-The call should return when the stage has arrived. `with_actuators` names a motor for every axis, as for `get_xyz`; `x`, `y` and `z` stay micrometres from the origin whichever motor moves. The answer is read from the microscope after the move, so the workflow sees the real position. If the stage never arrives, return `False`, so that the workflow stops.
+**Input**
+
+| Name | Type | What it is |
+|---|---|---|
+| `x`, `y`, `z` | `number` each | Where to move, in micrometres from the origin, whichever motor moves. Not checked: passed as the workflow gave them, so refuse a value outside the limits. |
+| `with_actuators` | `dict[str, str]` | As for `get_xyz`: checked, one motor for every axis. |
+
+**Return:** the same as `get_xyz`, read from the microscope after the move.
+
+The call should return when the stage has arrived. The answer is read from the microscope after the move, so the workflow sees the real position. If the move is outside the limits, or the stage never arrives, return `False`, so that the workflow stops.
 
 <br>
 
@@ -201,11 +256,18 @@ The call should return when the stage has arrived. `with_actuators` names a moto
 ```python
 def get_state(self):
     return True, (changeable, observed)
-    # changeable   {"exposure_ms": 10.0, ...}   what set_state can change
-    # observed     {"objective": "10x", ...}    read-only
 ```
 
-The keys are yours to choose. They differ between microscopes, so explain them in `get_info`.
+**Input:** none.
+
+**Return:** `True, (changeable, observed)`
+
+| Name | Type | What it is |
+|---|---|---|
+| `changeable` | `dict[str, Any]` | What `set_state` can change, for example `{"exposure_ms": 10.0}`. |
+| `observed` | `dict[str, Any]` | What can only be read, for example `{"objective": "10x"}`. |
+
+The keys are yours to choose. They differ between microscopes, so explain them in `get_info`. Keep the values to what JSON can hold (text, numbers, `True`/`False`, `None`, lists and dictionaries), so that a state can be saved and applied again.
 
 <br>
 
@@ -214,11 +276,22 @@ The keys are yours to choose. They differ between microscopes, so explain them i
 ```python
 def set_state(self, changeable):
     # apply each setting, read it back
-    return True, applied                        # {"exposure_ms": 20.0, ...}
-    return False, "<error message>"             # did not take, or unknown setting
+    return True, applied
 ```
 
-The call should return when the state has changed. Read each setting back, so that the answer shows what really took. A setting the microscope does not have is a failure.
+**Input**
+
+| Name | Type | What it is |
+|---|---|---|
+| `changeable` | `dict[str, Any]` | The settings to apply, in the form `get_state` gives them. Not checked: passed as the workflow gave it, and it may hold only some of your settings. |
+
+**Return:** `True, applied`
+
+| Name | Type | What it is |
+|---|---|---|
+| `applied` | `dict[str, Any]` | Each setting you applied, with the value read back, for example `{"exposure_ms": 20.0}`. |
+
+The call should return when the state has changed. Apply only the settings in `changeable`, and read each one back, so that the answer shows what really took. A setting the microscope does not have is a failure.
 
 <br>
 
@@ -227,10 +300,17 @@ The call should return when the state has changed. Read each setting back, so th
 ```python
 def get_acquisition_settings(self):
     return True, {"trigger": {"options": ["snap", "full"], "default": "snap", "active": "snap"}}
-    # options   the allowed values, or a rule in words
-    # default   the value you decide the microscope starts with
-    # active    the value used when acquire gets none
 ```
+
+**Input:** none.
+
+**Return:** `True, settings`, a `dict[str, dict]`: each setting by name, with
+
+| Key | Type | What it is |
+|---|---|---|
+| `options` | `list`, or `str` | The allowed values, or a rule in words. |
+| `default` | one of `options` when it is a list | The value you decide the microscope starts with. |
+| `active` | one of `options` when it is a list | The value used when `acquire` gets none. |
 
 Acquisition settings say only how an acquisition is triggered. For example, `snap` takes one picture with the settings as they are, and `full` runs the whole acquisition the vendor software has stored and selected. The names are yours to choose: list only the triggers your microscope has, and explain them in `get_info`. Nothing else belongs here: a z-stack, an exposure or which stored acquisition is selected are state, and how files are saved is set up once on the microscope.
 
@@ -240,18 +320,31 @@ Acquisition settings say only how an acquisition is triggered. For example, `sna
 
 ```python
 def acquire(self, position_label, acquisition_type, output_folder, acquisition_settings):
-    # take an image, save it in output_folder (your own place when it is None), never overwrite;
-    # position_label is the workflow's name, as given; acquisition_type goes in the file names and metadata
+    # take an image, save it in output_folder (your own place when it is None), never overwrite
     return True, (files, planes)
-    # files    ["D:/runs/run-1/overview_A1.ome.tif", ...]
-    # planes   [{"path": ..., "c": 0, "z": 0, "t": 0, "x_um": ..., "y_um": ..., "z_um": ...}, ...]
 ```
+
+**Input**
+
+| Name | Type | What it is |
+|---|---|---|
+| `position_label` | `str` | The workflow's name for this place, for example `"A1"`. Not checked: passed as the workflow gave it. |
+| `acquisition_type` | `str`, not empty | The kind of acquisition in the run, for example `"overview"`. Checked: `"acquisition"` when the workflow gave none. |
+| `output_folder` | `str` or `None` | The folder to save in. Checked: a path the workflow gave is turned into text; `None` means the place set up on the microscope. |
+| `acquisition_settings` | `dict[str, Any]` or `None` | How to trigger, for example `{"trigger": "full"}`. Not checked: `None` when the workflow gave none, and then you use the `active` value of each setting. |
+
+**Return:** `True, (files, planes)`
+
+| Name | Type | What it is |
+|---|---|---|
+| `files` | `list[str]` | Every file saved, by its full path, for example `["D:/runs/run-1/overview_A1.ome.tif"]`. A format that is a folder, such as OME-Zarr, is listed by its folder. Each must exist. |
+| `planes` | `list[dict]` | Every image plane, each `{"path": str, "c": int, "z": int, "t": int, "x_um": number, "y_um": number, "z_um": number}`: its file, its channel, slice and time point counted from 0, and where on the sample it was taken. |
 
 The call should return when the acquisition is done. Return every saved file and every image plane with its stage position. A workflow then finds its images in the same way on every microscope.
 
-`acquisition_type` is the kind of acquisition in the workflow's run, such as `"overview"`, `"focussing"` or `"targets"`. Put it in your file names (for example `<acquisition_type>_<position_label>`) and in the metadata you save. `output_folder` is the folder to save in, or `None` for the place set up on the microscope.
+`acquisition_type` is the kind of acquisition in the workflow's run, such as `"overview"`, `"focussing"` or `"targets"`. Put it in your file names (for example `<acquisition_type>_<position_label>`) and in the metadata you save.
 
-What a driver receives is fixed by the controller, whichever way the driver is written: `acquisition_type` is always a non-empty text (`"acquisition"` when the workflow gave none) and `output_folder` is always text or `None` (a path the workflow gave is turned into text). The controller fills these in and refuses anything else before your driver is asked, so a driver applies no default of its own and needs nothing from the controller's package. The controller also reports the type in its answer, so you return only `files` and `planes`. When your vendor software always saves in a place of its own, save there and return the real paths; never refuse. Say so in `get_info` with `chooses_its_own_folder`. `check_acquire_answer(answer, output_folder=..., chooses_its_own_folder=...)` checks that every file lies in the folder it was given, unless the driver chooses its own.
+The controller fills in `acquisition_type` and `output_folder` and refuses anything else before your driver is asked, so a driver applies no default of its own for them and needs nothing from the controller's package. The controller also reports the type and the label in its answer, so you return only `files` and `planes`. When your vendor software always saves in a place of its own, save there and return the real paths; never refuse. Say so in `get_info` with `chooses_its_own_folder`. `check_acquire_answer(answer, output_folder=..., chooses_its_own_folder=...)` checks that every file lies in the folder it was given, unless the driver chooses its own.
 
 Every plane says where on the sample it was taken, in the frame `set_xyz` takes: `x_um` and `y_um` are the centre of the field of view, the stage position, never a corner of the image. A z-stack the microscope makes by itself is described the same way on every microscope: `z_um` is each slice's own height, `z = 0` is the lowest slice and each depth above it is higher, whichever way the microscope moved, and the channels of one slice share its height. `check_acquire_answer` refuses an answer that does not.
 
@@ -263,8 +356,12 @@ A driver that saves OME-Zarr places the image by its translation, and the transl
 
 ```python
 def get_procedures(self):
-    return True, {name: {"description": ...}}  # e.g. autofocus; the description names the options and defaults
+    return True, {"autofocus": {"description": "..."}}
 ```
+
+**Input:** none.
+
+**Return:** `True, procedures`, a `dict[str, dict]`: each procedure by name, with at least `{"description": str}`. The description names the options and their defaults.
 
 Routines are not standardised. The description is where you tell the user what a routine does and which options it takes.
 
@@ -273,10 +370,21 @@ Routines are not standardised. The description is where you tell the user what a
 #### `run_procedure`
 
 ```python
-def run_procedure(self, procedure):             # {"name": "autofocus", ...}: the routine and its options
+def run_procedure(self, procedure):
     return True, procedure["name"]
-    return False, "<error message>"             # unknown name
 ```
+
+**Input**
+
+| Name | Type | What it is |
+|---|---|---|
+| `procedure` | `dict[str, Any]` | `"name"`, the routine to run, and its options under their own keys, for example `{"name": "autofocus", "range_um": 50}`. Not checked: passed as the workflow gave it. |
+
+**Return:** `True, ran`
+
+| Name | Type | What it is |
+|---|---|---|
+| `ran` | `str` | The name of the routine that ran. |
 
 The call should return when the procedure is done. A name that `get_procedures` does not list is a failure.
 

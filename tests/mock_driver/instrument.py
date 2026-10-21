@@ -280,11 +280,11 @@ def actuators_to_use(with_actuators: dict | None) -> dict[str, str]:
 
 
 def get_xyz(handle: MockHandle, *, with_actuators: dict | None = None) -> dict:
-    """Where the stage is, per axis: ``position``, ``unit``, ``actuator``, ``actuators``, ``canvas``.
+    """Where the stage is, per axis: ``position``, ``unit``, ``used_actuator``, ``actuator_readings``, ``canvas``.
 
-    ``position`` is micrometres from the origin. ``actuator`` is the motor
-    this call used: the one ``with_actuators`` named, or the default.
-    ``actuators`` holds every motor of the axis with its own raw reading, in
+    ``position`` is micrometres from the origin. ``used_actuator`` is the
+    motor this call used: the one ``with_actuators`` named, or the default.
+    ``actuator_readings`` holds every motor of the axis with its own reading, in
     the stage's own coordinates: for z, the coarse drive and the piezo, whose
     sum is the focus height. ``canvas`` is everywhere a picture can show
     along the axis.
@@ -304,8 +304,8 @@ def get_xyz(handle: MockHandle, *, with_actuators: dict | None = None) -> dict:
         axis: {
             "position": user[axis],
             "unit": UNIT,
-            "actuator": chosen[axis],
-            "actuators": readings[axis],
+            "used_actuator": chosen[axis],
+            "actuator_readings": readings[axis],
             "canvas": canvas[axis],
         }
         for axis in ("x", "y", "z")

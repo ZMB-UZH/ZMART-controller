@@ -61,10 +61,10 @@ class ZmartControllerPlugin:
         raise NotImplementedError("ZmartControllerPlugin.get_actuators: return True, (x, y, z)")
 
     def get_xyz(self, with_actuators):
-        """Return ``True, (x, y, z, actuators, canvas)``, everything in micrometres.
+        """Return ``True, (x, y, z, actuator_readings, canvas)``, everything in micrometres.
 
         ``x``, ``y`` and ``z`` are the position from the origin, in the
-        sample's coordinate system. ``actuators`` is
+        sample's coordinate system. ``actuator_readings`` is
         ``{"x": {...}, "y": {...}, "z": {...}}``: for each axis, every motor
         ``get_actuators`` lists with its own raw reading, exactly as the
         microscope reports it and without any origin subtracted, for example
@@ -76,7 +76,7 @@ class ZmartControllerPlugin:
         already filled in your defaults and refused a motor you do not list.
         """
         raise NotImplementedError(
-            "ZmartControllerPlugin.get_xyz: return True, (x, y, z, actuators, canvas)"
+            "ZmartControllerPlugin.get_xyz: return True, (x, y, z, actuator_readings, canvas)"
         )
 
     def set_xyz(self, x, y, z, with_actuators):

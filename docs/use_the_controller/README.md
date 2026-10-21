@@ -116,7 +116,7 @@ mic.get_info()
               'chooses_its_own_folder': False}}
   ```
 
-- **Note:** A description of the microscope, written by the driver's author. It explains the settings and the axes. Read it once when you start on a new microscope. `setup` lists what is set up once on this microscope, such as where and how it saves, each with whether it is done. `chooses_its_own_folder` is `False` when `acquire` saves in the `output_folder` you give it, and `True` when the microscope's software always saves in its own place; `acquire` then saves there, and its answer says where.
+- **Note:** Always exactly these three keys. A description of the microscope, written by the driver's author. It explains the settings and the axes. Read it once when you start on a new microscope. `setup` lists what is set up once on this microscope, such as where and how it saves, each with whether it is done. `chooses_its_own_folder` is `False` when `acquire` saves in the `output_folder` you give it, and `True` when the microscope's software always saves in its own place; `acquire` then saves there, and its answer says where.
 
 <br>
 
@@ -152,16 +152,16 @@ mic.get_xyz(with_actuators=None)
 
   ```python
   {'success': True,
-   'output': {'x': {'position': 0.0, 'unit': 'micrometer', 'actuator': 'motoric', 'actuators': {'motoric': 50000.0},               'canvas': [-5032.0, 5032.0]},
-              'y': {'position': 0.0, 'unit': 'micrometer', 'actuator': 'motoric', 'actuators': {'motoric': 37500.0},               'canvas': [-5032.0, 5032.0]},
-              'z': {'position': 0.0, 'unit': 'micrometer', 'actuator': 'motoric', 'actuators': {'motoric': 5000.0, 'piezo': 0.0},  'canvas': [-500.0, 500.0]}}}
+   'output': {'x': {'position': 0.0, 'unit': 'micrometer', 'used_actuator': 'motoric', 'actuator_readings': {'motoric': 50000.0},               'canvas': [-5032.0, 5032.0]},
+              'y': {'position': 0.0, 'unit': 'micrometer', 'used_actuator': 'motoric', 'actuator_readings': {'motoric': 37500.0},               'canvas': [-5032.0, 5032.0]},
+              'z': {'position': 0.0, 'unit': 'micrometer', 'used_actuator': 'motoric', 'actuator_readings': {'motoric': 5000.0, 'piezo': 0.0},  'canvas': [-500.0, 500.0]}}}
   ```
 
 - **Note:** One dictionary with the keys `x`, `y` and `z`. Each axis has the same five entries. All numbers are in micrometres.
   - `position`: the position of the view in the absolute coordinate system: x and y are the centre of the field of view. In a saved image, right is +x and down is +y.
   - `unit`: `'micrometer'`. This is the unit of every number in the answer. It is given as information.
-  - `actuator`: the motor this call used: the one you chose, or else the default.
-  - `actuators`: the raw reading of each motor on this axis, as the microscope reports it. When an axis has several motors, this shows how they share the position.
+  - `used_actuator`: the name of the motor this call used: the one you chose in `with_actuators`, or else the default from `get_actuators`.
+  - `actuator_readings`: what each motor on this axis reads, as the microscope reports it, measured from the motor's own zero rather than from the origin. When an axis has several motors, this shows how they share the position. For information only: move with `position`.
   - `canvas`: `[min, max]`. The range on this axis where an image can be taken. It is the stage travel plus half a field of view.
 
 <br>
@@ -179,9 +179,9 @@ mic.set_xyz(x, y, z, with_actuators=None)
 
   ```python
   {'success': True,
-   'output': {'x': {'position': 100.0, 'unit': 'micrometer', 'actuator': 'motoric', 'actuators': {'motoric': 50100.0},               'canvas': [-5032.0, 5032.0]},
-              'y': {'position': 50.0,  'unit': 'micrometer', 'actuator': 'motoric', 'actuators': {'motoric': 37550.0},               'canvas': [-5032.0, 5032.0]},
-              'z': {'position': 0.0,   'unit': 'micrometer', 'actuator': 'motoric', 'actuators': {'motoric': 5000.0, 'piezo': 0.0},  'canvas': [-500.0, 500.0]}}}
+   'output': {'x': {'position': 100.0, 'unit': 'micrometer', 'used_actuator': 'motoric', 'actuator_readings': {'motoric': 50100.0},               'canvas': [-5032.0, 5032.0]},
+              'y': {'position': 50.0,  'unit': 'micrometer', 'used_actuator': 'motoric', 'actuator_readings': {'motoric': 37550.0},               'canvas': [-5032.0, 5032.0]},
+              'z': {'position': 0.0,   'unit': 'micrometer', 'used_actuator': 'motoric', 'actuator_readings': {'motoric': 5000.0, 'piezo': 0.0},  'canvas': [-500.0, 500.0]}}}
   ```
 
 - **Note:** You choose which actuator makes the move, but `x`, `y` and `z` are always positions in the absolute coordinate system of the canvas, in micrometres, never in the actuator's own units. The call should return when the stage has arrived. The answer is the same as `get_xyz`, read from the microscope. So it shows the real position, not the one you asked for. A move outside the travel returns `success: False`. So does a move the driver could not confirm.

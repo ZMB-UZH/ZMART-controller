@@ -116,13 +116,14 @@ class ZmartController:
         return {"success": True, "output": {"x": x, "y": y, "z": z}}
 
     def get_xyz(self, with_actuators: dict | None = None) -> dict:
-        """Where the stage is. Each axis: ``position``, ``unit``, ``actuator``, ``actuators``, ``canvas``.
+        """Where the stage is. Each axis: ``position``, ``unit``, ``used_actuator``, ``actuator_readings``, ``canvas``.
 
         ``position`` is measured from the origin. ``unit`` says that every
-        number here is in micrometres. ``actuator`` is the motor this call
-        used: the one ``with_actuators`` chose for the axis, or else the
-        default ``get_actuators`` names. ``actuators`` gives each motor of
-        that axis with its own raw reading, as the microscope reports it.
+        number here is in micrometres. ``used_actuator`` is the motor this
+        call used: the one ``with_actuators`` chose for the axis, or else the
+        default ``get_actuators`` names. ``actuator_readings`` gives each
+        motor of that axis with its own reading, as the microscope reports
+        it, measured from the motor's own zero rather than from the origin.
         ``canvas`` is everywhere a picture can show.
         """
         try:
@@ -339,26 +340,26 @@ def output_folder_as_text(output_folder: str | PathLike | None) -> str | None:
 def xyz_output(result, chosen: dict[str, str]) -> dict:
     """Build the answer of ``get_xyz`` and ``set_xyz`` from what the plugin hands back.
 
-    The plugin returns ``(x, y, z, actuators, canvas)``: the position in
-    micrometres from the origin, the raw reading of every motor per axis
-    (``{"x": {...}, "y": {...}, "z": {...}}``), and the canvas
+    The plugin returns ``(x, y, z, actuator_readings, canvas)``: the
+    position in micrometres from the origin, the reading of every motor per
+    axis (``{"x": {...}, "y": {...}, "z": {...}}``), and the canvas
     ``(x_min, x_max, y_min, y_max, z_min, z_max)``. Every number is in
     micrometres, and each axis says so under ``unit``. ``chosen`` is the
-    motor used per axis, which each axis names under ``actuator``.
+    motor used per axis, which each axis names under ``used_actuator``.
     """
-    x, y, z, actuators, canvas = result
+    x, y, z, readings, canvas = result
     x_min, x_max, y_min, y_max, z_min, z_max = canvas
     axes = {
-        "x": (x, actuators["x"], [x_min, x_max]),
-        "y": (y, actuators["y"], [y_min, y_max]),
-        "z": (z, actuators["z"], [z_min, z_max]),
+        "x": (x, readings["x"], [x_min, x_max]),
+        "y": (y, readings["y"], [y_min, y_max]),
+        "z": (z, readings["z"], [z_min, z_max]),
     }
     return {
         axis: {
             "position": position,
             "unit": UNIT,
-            "actuator": chosen[axis],
-            "actuators": dict(motors),
+            "used_actuator": chosen[axis],
+            "actuator_readings": dict(motors),
             "canvas": canvas,
         }
         for axis, (position, motors, canvas) in axes.items()

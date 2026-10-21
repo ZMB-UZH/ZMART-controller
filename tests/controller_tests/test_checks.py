@@ -51,21 +51,25 @@ def xyz_with(**per_axis):
     """A plugin ``get_xyz`` whose values for one or more axes are changed.
 
     Each keyword names an axis and gives a dict of the values to change:
-    ``position``, ``actuators`` or ``canvas``. An axis left out is at 0.0
+    ``position``, ``actuator_readings`` or ``canvas``. An axis left out is at 0.0
     micrometres, reads one motor, and has a canvas of [-150, 150].
     """
 
     def get_xyz(self, with_actuators):
         values = {
-            axis: {"position": 0.0, "actuators": {"motoric": 48_000.0}, "canvas": [-150.0, 150.0]}
+            axis: {
+                "position": 0.0,
+                "actuator_readings": {"motoric": 48_000.0},
+                "canvas": [-150.0, 150.0],
+            }
             for axis in ("x", "y", "z")
         }
         for axis, changed in per_axis.items():
             values[axis].update(changed)
         positions = tuple(values[axis]["position"] for axis in ("x", "y", "z"))
-        actuators = {axis: values[axis]["actuators"] for axis in ("x", "y", "z")}
+        readings = {axis: values[axis]["actuator_readings"] for axis in ("x", "y", "z")}
         canvas = tuple(end for axis in ("x", "y", "z") for end in values[axis]["canvas"])
-        return True, (*positions, actuators, canvas)
+        return True, (*positions, readings, canvas)
 
     return get_xyz
 
@@ -90,19 +94,19 @@ def test_problems_are_named(monkeypatch, mock):
 
 
 def test_the_motor_used_must_be_one_of_the_axis_readings(monkeypatch, mock):
-    break_plugin(monkeypatch, "get_xyz", xyz_with(z={"actuators": {"piezo": 37.0}}))
+    break_plugin(monkeypatch, "get_xyz", xyz_with(z={"actuator_readings": {"piezo": 37.0}}))
     assert validate_driver(mock) == [
-        "get_xyz: axis 'z' actuator 'motoric' must be one of the motors it reads, ['piezo']"
+        "get_xyz: axis 'z' used_actuator 'motoric' must be one of its actuator_readings, ['piezo']"
     ]
 
 
-@pytest.mark.parametrize("actuators", [{}, {"motoric": "48000"}, {"": 48000.0}])
-def test_actuators_must_name_each_motor_with_a_number(monkeypatch, mock, actuators):
-    break_plugin(monkeypatch, "get_xyz", xyz_with(z={"actuators": actuators}))
+@pytest.mark.parametrize("readings", [{}, {"motoric": "48000"}, {"": 48000.0}])
+def test_actuator_readings_must_name_each_motor_with_a_number(monkeypatch, mock, readings):
+    break_plugin(monkeypatch, "get_xyz", xyz_with(z={"actuator_readings": readings}))
     problems = validate_driver(mock)
     assert problems[0] == (
-        "get_xyz: axis 'z' actuators must name every motor of the axis with its raw reading "
-        "as a number, in micrometres"
+        "get_xyz: axis 'z' actuator_readings must name every motor of the axis with its "
+        "reading as a number, in micrometres"
     )
 
 

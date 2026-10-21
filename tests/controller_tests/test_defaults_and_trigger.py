@@ -98,7 +98,7 @@ def test_the_driver_decides_the_default_not_the_list_order():
 
     answer = session.get_xyz()["output"]
 
-    assert answer["z"]["actuator"] == "piezo"
+    assert answer["z"]["used_actuator"] == "piezo"
     assert session.plugin.asked == [{"x": "motoric", "y": "motoric", "z": "piezo"}]
 
 
@@ -109,7 +109,7 @@ def test_get_and_set_use_the_same_default_and_say_which_motor(command):
 
     answer = call() if command == "get_xyz" else call(1.0, 2.0, 0.0)
 
-    assert {axis: reading["actuator"] for axis, reading in answer["output"].items()} == {
+    assert {axis: reading["used_actuator"] for axis, reading in answer["output"].items()} == {
         "x": "motoric",
         "y": "motoric",
         "z": "motoric",
@@ -122,8 +122,8 @@ def test_a_chosen_motor_replaces_the_default_for_that_axis_only():
 
     answer = session.set_xyz(0.0, 0.0, 5.0, with_actuators={"z": "piezo"})["output"]
 
-    assert answer["z"]["actuator"] == "piezo"
-    assert answer["x"]["actuator"] == "motoric"
+    assert answer["z"]["used_actuator"] == "piezo"
+    assert answer["x"]["used_actuator"] == "motoric"
     assert session.plugin.asked == [{"x": "motoric", "y": "motoric", "z": "piezo"}]
 
 

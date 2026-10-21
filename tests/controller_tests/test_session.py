@@ -50,7 +50,13 @@ class TestPosition:
         assert (pos["x"]["position"], pos["y"]["position"], pos["z"]["position"]) == (10, 20, 5)
         assert pos == mic.get_xyz()["output"]
         for axis in ("x", "y", "z"):
-            assert list(pos[axis]) == ["position", "unit", "actuator", "actuators", "canvas"]
+            assert list(pos[axis]) == [
+                "position",
+                "unit",
+                "used_actuator",
+                "actuator_readings",
+                "canvas",
+            ]
             assert pos[axis]["unit"] == "micrometer"
 
     def test_origin_is_driver_configuration(self, mock):
@@ -74,22 +80,22 @@ class TestPosition:
         }
 
     def test_every_answer_says_which_motor_it_used(self, mic):
-        assert mic.get_xyz()["output"]["z"]["actuator"] == "motoric"
+        assert mic.get_xyz()["output"]["z"]["used_actuator"] == "motoric"
         assert (
-            mic.set_xyz(0, 0, 5, with_actuators={"z": "piezo"})["output"]["z"]["actuator"]
+            mic.set_xyz(0, 0, 5, with_actuators={"z": "piezo"})["output"]["z"]["used_actuator"]
             == "piezo"
         )
 
     def test_every_motor_reports_its_raw_reading(self, mic):
-        """``actuators`` lists each motor of the axis with the reading the stage itself reports."""
+        """``actuator_readings`` lists each motor of the axis with the reading the stage itself reports."""
         pos = mic.get_xyz(with_actuators={"z": "piezo"})["output"]
         stage = mic.plugin.handle.scope.send("GetStagePosition")["result"]
         focus = mic.plugin.handle.scope.send("GetFocus")["result"]
-        assert pos["x"]["actuators"] == {"motoric": stage["x"]}
-        assert pos["y"]["actuators"] == {"motoric": stage["y"]}
-        assert pos["z"]["actuators"] == {"motoric": focus["focus"], "piezo": focus["piezo"]}
+        assert pos["x"]["actuator_readings"] == {"motoric": stage["x"]}
+        assert pos["y"]["actuator_readings"] == {"motoric": stage["y"]}
+        assert pos["z"]["actuator_readings"] == {"motoric": focus["focus"], "piezo": focus["piezo"]}
         # Raw readings are the stage's own numbers, not the position from the origin.
-        assert pos["x"]["actuators"]["motoric"] != pos["x"]["position"]
+        assert pos["x"]["actuator_readings"]["motoric"] != pos["x"]["position"]
 
     def test_unknown_actuator_is_refused(self, mic):
         failed = mic.set_xyz(0, 0, 0, with_actuators={"z": "hovercraft"})
@@ -233,10 +239,15 @@ class TestDisconnect:
 
         The next call is back to the default the driver names."""
         with_piezo = mic.set_xyz(0, 0, 30, with_actuators={"z": "piezo"})["output"]["z"]
-        assert with_piezo["actuators"]["piezo"] == 30.0
+        assert with_piezo["actuator_readings"]["piezo"] == 30.0
         by_default = mic.set_xyz(0, 0, 40)["output"]["z"]
-        assert by_default["actuators"]["piezo"] == 30.0  # the piezo stayed; the coarse drive moved
-        assert by_default["actuators"]["motoric"] == with_piezo["actuators"]["motoric"] + 10.0
+        assert (
+            by_default["actuator_readings"]["piezo"] == 30.0
+        )  # the piezo stayed; the coarse drive moved
+        assert (
+            by_default["actuator_readings"]["motoric"]
+            == with_piezo["actuator_readings"]["motoric"] + 10.0
+        )
 
     def test_invalid_acquire_option_rejected(self, mic):
         failed = mic.acquire(position_label="A1", acquisition_settings={"tigger": "snap"})
