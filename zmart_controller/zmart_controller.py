@@ -224,8 +224,9 @@ class ZmartController:
         run, such as ``"overview"`` or ``"targets"``; the driver puts it in
         its file names and metadata, and the answer reports it beside
         ``position_label``. Left out, it is ``DEFAULT_ACQUISITION_TYPE``.
-        ``output_folder`` is where the files go; left out, the driver saves
-        where it was set up to. A microscope whose software always saves in
+        ``output_folder`` is the folder for the acquisition: the driver
+        saves in it, in folders of its own choosing, and that layout is
+        kept; left out, the driver saves where it was set up to. A microscope whose software always saves in
         its own place saves there instead and says so in ``get_info``; the
         answer always lists where the files really are.
         ``acquisition_settings`` says how to trigger the acquisition; left
