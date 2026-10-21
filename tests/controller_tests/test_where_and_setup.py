@@ -1,8 +1,8 @@
 """What a microscope still needs set up, and what each acquisition setting starts at.
 
-``get_info`` answers three things: the microscope in words, its set-up
-items, each done or not with what to do about it, and whether it chooses its
-own folder. Where the microscope saves is one of the set-up items, in words:
+``get_info`` answers four things: the microscope in words, its set-up
+items, each done or not with what to do about it, whether it chooses its
+own folder, and how the connection's checks went (``connection_status``). Where the microscope saves is one of the set-up items, in words:
 the workflow decides where its own runs go.
 Each acquisition setting says its ``default`` beside its ``active`` value.
 """
@@ -24,6 +24,7 @@ class Scope(ZmartControllerPlugin):
         "A scope in memory. +z points up.",
         {"limits": {"done": True, "says": "published"}},
         False,
+        {"stage": "found, at x 0 y 0 z 0 um", "limits": "pending"},
     )
     settings = {"trigger": {"options": ["snap", "full"], "default": "snap", "active": "snap"}}
 
@@ -71,8 +72,20 @@ def test_get_info_says_what_is_set_up():
         "description": "A scope in memory. +z points up.",
         "setup": {"limits": {"done": True, "says": "published"}},
         "chooses_its_own_folder": False,
+        "connection_status": {"stage": "found, at x 0 y 0 z 0 um", "limits": "pending"},
     }
     assert validate_driver(Scope, {}) == []
+
+
+def test_the_connections_checks_keep_their_order():
+    """A client shows one row per check, in the driver's order."""
+    checks = {"driver": "loaded", "stage": "pending", "saving": "failed: no disk D:"}
+    driver = scope(info=("A scope in memory. +z points up.", {}, False, checks))
+
+    content = ZmartController(driver, {}).get_info()["output"]
+
+    assert list(content["connection_status"].items()) == list(checks.items())
+    assert validate_driver(driver, {}) == []
 
 
 def test_a_scope_not_yet_told_where_to_save_says_so_and_how():
@@ -81,6 +94,7 @@ def test_a_scope_not_yet_told_where_to_save_says_so_and_how():
             "A scope in memory. +z points up.",
             {"data_location": {"done": False, "says": "run set_data_location.ipynb once"}},
             False,
+            {},
         )
     )
 
@@ -96,9 +110,12 @@ def test_a_scope_not_yet_told_where_to_save_says_so_and_how():
 @pytest.mark.parametrize(
     ("info", "says"),
     [
-        (("A scope. +z up.", ["limits"], False), "setup"),
-        (("A scope. +z up.", {"limits": {"done": "yes", "says": "x"}}, False), "done"),
-        (("A scope. +z up.", {"limits": {"done": False, "says": ""}}, False), "what to do"),
+        (("A scope. +z up.", ["limits"], False, {}), "setup"),
+        (("A scope. +z up.", {"limits": {"done": "yes", "says": "x"}}, False, {}), "done"),
+        (("A scope. +z up.", {"limits": {"done": False, "says": ""}}, False, {}), "what to do"),
+        (("A scope. +z up.", {}, False, ["stage"]), "connection_status"),
+        (("A scope. +z up.", {}, False, {"stage": 3}), "connection_status"),
+        (("A scope. +z up.", {}, False, {"stage": ""}), "connection_status"),
     ],
 )
 def test_a_wrong_answer_is_named(info, says):

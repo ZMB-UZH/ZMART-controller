@@ -147,6 +147,19 @@ def _check_info(output, problems):
             problems.append(
                 f"get_info: setup {item!r} must say in words what it holds or what to do"
             )
+    status = output.get("connection_status", {})
+    if not isinstance(status, dict):
+        problems.append(
+            "get_info: connection_status must map each of the connection's checks to its "
+            'answer, "pending", or a text that begins with "failed"'
+        )
+        return
+    for check, answer in status.items():
+        if not (isinstance(answer, str) and answer.strip()):
+            problems.append(
+                f"get_info: connection_status {check!r} must say in words how the check went, "
+                '"pending" until it has an answer'
+            )
 
 
 def _check_actuators(output, problems):

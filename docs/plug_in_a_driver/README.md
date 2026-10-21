@@ -161,25 +161,28 @@ Close cleanly, so that the vendor software can be opened again. This method is o
 
 ```python
 def get_info(self):
-    return True, (description, setup, chooses_its_own_folder)
+    return True, (description, setup, chooses_its_own_folder, connection_status)
 ```
 
 **Input:** none.
 
-**Return:** `True, (description, setup, chooses_its_own_folder)`
+**Return:** `True, (description, setup, chooses_its_own_folder, connection_status)`
 
 | Name | Type | What it is |
 |---|---|---|
 | `description` | `str`, not empty | The settings, their units and limits, the objectives, which way +z points. |
 | `setup` | `dict[str, dict]`: each value `{"done": bool, "says": str}` | Each thing set up once on this microscope; `{}` when there is none. `says` is not empty. |
 | `chooses_its_own_folder` | `bool` | `False`: `acquire` saves in the `output_folder` it is given. `True`: the software always saves in its own place. |
+| `connection_status` | `dict[str, str]` | The connection's checks in the order a client shows them, each with its answer in words, `"pending"` until it has one, or a text that begins with `failed`. `{}` when there is nothing to check. |
 
-The answer the workflow sees has exactly these three keys, so the
+The answer the workflow sees has exactly these four keys, so the
 description is where everything else about your microscope goes.
 
 The description is what a person or an AI agent reads to understand your microscope. Write what the other commands cannot tell.
 
 `setup` lists what is set up once on this microscope, such as its limits, a calibration, or where and in which format it saves. For each item, say whether it is done, and in words what it holds or, when it is not done, what to run. A program can then tell the operator what is missing before anything is captured.
+
+`connection_status` is what an operator watches while connecting: did the vendor software answer, was the stage found, can the disk be written. A client asks `get_info` again until no check is `"pending"`, so a check that takes a while can answer later. A failed check stops the connection, so begin its answer with `failed` and say why.
 
 `chooses_its_own_folder` says whether `acquire` saves where it is told. Answer `False` when your driver can choose the folder: it writes the files itself, or the vendor software takes a folder. Answer `True` only when the vendor software always saves in a place of its own, and say in `setup` where that is.
 

@@ -78,7 +78,7 @@ def info_with(description):
     """A plugin ``get_info`` that describes the microscope with ``description``."""
 
     def get_info(self):
-        return True, (description, {}, False)
+        return True, (description, {}, False, {})
 
     return get_info
 

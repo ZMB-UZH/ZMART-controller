@@ -70,11 +70,16 @@ class ZmartController:
             self.plugin.disconnect()
 
     def get_info(self) -> dict:
-        """The microscope in plain words, what is set up on it, and whether it chooses its own folder.
+        """The microscope in plain words, what is set up on it, whether it
+        chooses its own folder, and how the connection's checks went.
 
         ``chooses_its_own_folder`` is True for a microscope whose software
         always saves in its own place, whatever ``output_folder`` ``acquire``
         is given; its answers then list where the files really are.
+        ``connection_status`` holds the connection's checks in the driver's
+        order, each with its answer, ``"pending"`` until it has one, or a
+        text that begins with ``failed``; ``{}`` when there is nothing to
+        check.
         """
         try:
             ok, result = self.plugin.get_info()
@@ -85,7 +90,7 @@ class ZmartController:
         if not ok:
             return {"success": False, "output": result}
 
-        description, setup, chooses_its_own_folder = result
+        description, setup, chooses_its_own_folder, connection_status = result
 
         return {
             "success": True,
@@ -93,6 +98,7 @@ class ZmartController:
                 "description": description,
                 "setup": setup,
                 "chooses_its_own_folder": chooses_its_own_folder,
+                "connection_status": connection_status,
             },
         }
 

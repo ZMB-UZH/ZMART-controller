@@ -37,7 +37,7 @@ class Scope(ZmartControllerPlugin):
         pass
 
     def get_info(self):
-        return True, ("A scope in memory. +z points up.", {}, self.chooses_its_own_folder)
+        return True, ("A scope in memory. +z points up.", {}, self.chooses_its_own_folder, {})
 
     def get_actuators(self):
         motor = {"options": ["motoric"], "default": "motoric"}
@@ -151,7 +151,7 @@ def test_a_driver_whose_acquire_takes_neither_is_named(scope):
 
 def test_a_driver_that_does_not_say_whether_it_chooses_its_folder_is_named(scope):
     def get_info(self):
-        return True, ("A scope in memory. +z points up.", {}, "sometimes")
+        return True, ("A scope in memory. +z points up.", {}, "sometimes", {})
 
     vague = type("Vague", (scope,), {"get_info": get_info})
 

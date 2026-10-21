@@ -38,7 +38,7 @@ class KeywordOnly(ZmartControllerPlugin):
         pass
 
     def get_info(self):
-        return True, ("A scope in memory. +z points up.", {}, False)
+        return True, ("A scope in memory. +z points up.", {}, False, {})
 
     def get_actuators(self):
         return True, (AXIS, AXIS, AXIS)

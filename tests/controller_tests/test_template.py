@@ -37,7 +37,7 @@ class PretendDriver(ZmartControllerPlugin):
         pass
 
     def get_info(self):
-        return True, ("A pretend microscope. +z points up.", {}, False)
+        return True, ("A pretend microscope. +z points up.", {}, False, {})
 
     def get_actuators(self):
         return True, (

@@ -33,7 +33,7 @@ class ZmartControllerPlugin:
         raise NotImplementedError("ZmartControllerPlugin.disconnect: close the connection")
 
     def get_info(self):
-        """Return ``True, (description, setup, chooses_its_own_folder)``.
+        """Return ``True, (description, setup, chooses_its_own_folder, connection_status)``.
 
         ``description`` is the microscope in plain words: what each
         changeable setting means, its unit and bounds, which objective sits
@@ -44,10 +44,16 @@ class ZmartControllerPlugin:
         when there is nothing to set up. ``chooses_its_own_folder`` is
         ``False`` when ``acquire`` saves in the ``output_folder`` it is
         given, and ``True`` when the vendor software always saves in a place
-        of its own; say where in ``setup``.
+        of its own; say where in ``setup``. ``connection_status`` is
+        ``{check: answer}``, in the order a client shows them: what the
+        connection checked (the software answers, the stage was found, the
+        disk can be written), each answered in words, ``"pending"`` until it
+        is, or beginning with ``failed`` when it failed; ``{}`` when there is
+        nothing to check.
         """
         raise NotImplementedError(
-            "ZmartControllerPlugin.get_info: return True, (description, setup, chooses_its_own_folder)"
+            "ZmartControllerPlugin.get_info: return True, "
+            "(description, setup, chooses_its_own_folder, connection_status)"
         )
 
     def get_actuators(self):

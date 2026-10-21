@@ -113,10 +113,11 @@ mic.get_info()
                              'DAPI, GFP and TxRed, each with its own exposure in milliseconds and '
                              'LED power in percent.',
               'setup': {'<something set up once on this microscope>': {'done': True, 'says': '<whatever context you want to provide>'}},
-              'chooses_its_own_folder': False}}
+              'chooses_its_own_folder': False,
+              'connection_status': {'software': 'answers, version 4.7', 'stage': 'found'}}}
   ```
 
-- **Note:** Always exactly these three keys. A description of the microscope, written by the driver's author. It explains the settings and the axes. Read it once when you start on a new microscope. `setup` lists what is set up once on this microscope, such as where and how it saves, each with whether it is done. `chooses_its_own_folder` is `False` when `acquire` saves in the `output_folder` you give it, and `True` when the microscope's software always saves in its own place; `acquire` then saves there, and its answer says where.
+- **Note:** Always exactly these four keys. A description of the microscope, written by the driver's author. It explains the settings and the axes. Read it once when you start on a new microscope. `setup` lists what is set up once on this microscope, such as where and how it saves, each with whether it is done. `chooses_its_own_folder` is `False` when `acquire` saves in the `output_folder` you give it, and `True` when the microscope's software always saves in its own place; `acquire` then saves there, and its answer says where. `connection_status` holds the connection's checks in order, each with its answer, `"pending"` until it has one, or a text that begins with `failed`: ask again while one is pending.
 
 <br>
 

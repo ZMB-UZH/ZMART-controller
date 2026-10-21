@@ -35,7 +35,12 @@ class ZmartControllerPlugin:
 
     def get_info(self):
         info = instrument.get_info(self.handle)
-        return True, (info["description"], info["setup"], info["chooses_its_own_folder"])
+        return True, (
+            info["description"],
+            info["setup"],
+            info["chooses_its_own_folder"],
+            info["connection_status"],
+        )
 
     def get_actuators(self):
         motors = instrument.get_actuators(self.handle)

@@ -33,6 +33,7 @@ class Scope(ZmartControllerPlugin):
         "A scope in memory. +z points up.",
         {"saving": {"done": True, "says": "OME-TIFF under D:/data"}},
         False,
+        {},
     )
 
     def __init__(self, connection):
@@ -154,6 +155,7 @@ def test_get_info_answers_the_description_and_the_setup():
         "description": "A scope in memory. +z points up.",
         "setup": {"saving": {"done": True, "says": "OME-TIFF under D:/data"}},
         "chooses_its_own_folder": False,
+        "connection_status": {},
     }
 
 

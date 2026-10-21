@@ -45,7 +45,7 @@ class ZmartControllerPlugin:
         pass
 
     def get_info(self):
-        return True, (DESCRIPTION, {{}}, False)
+        return True, (DESCRIPTION, {{}}, False, {{}})
 
     def get_actuators(self):
         return True, (AXIS, AXIS, AXIS)

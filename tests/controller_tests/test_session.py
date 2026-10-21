@@ -212,8 +212,9 @@ class TestProcedures:
 class TestInfo:
     def test_get_info_answers_the_description_the_setup_and_the_folder_rule(self, mic):
         info = mic.get_info()["output"]
-        assert list(info) == ["description", "setup", "chooses_its_own_folder"]
+        assert list(info) == ["description", "setup", "chooses_its_own_folder", "connection_status"]
         assert "pretend widefield fluorescence microscope" in info["description"]
+        assert list(info["connection_status"]) == ["software", "stage"]
 
     def test_the_mock_starts_from_its_shipped_configuration(self, mic):
         # Nothing has been set up yet, so every configuration item is a shipped default.

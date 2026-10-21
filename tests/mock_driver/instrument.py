@@ -251,6 +251,10 @@ def get_info(handle: MockHandle) -> dict:
         "configuration": dict(handle.config.sources),
         "setup": {"saving": {"done": True, "says": saving}},
         "chooses_its_own_folder": False,
+        "connection_status": {
+            "software": f"answers, version {handle.software['version']}",
+            "stage": "found",
+        },
     }
 
 
