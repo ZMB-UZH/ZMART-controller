@@ -146,19 +146,21 @@ themselves are in 5.4.
 ### 5.4) The actuator readings — `…/actuator-readings`
 
 Per plane position (per `t` and `z`; the channels share it), a `MapAnnotation` referenced
-from those `Plane`s: each actuator's reading, as `get_xyz` names them in
-`actuator_readings`, and the `used_actuator` per axis.
+from those `Plane`s: each actuator's reading when the plane was taken, in µm, keyed
+`<axis>/<actuator>` with the names `get_xyz` gives in `actuator_readings`, for example
+`z/<actuator name>`. Which actuator moved an axis is the capture record's `xyz`
+`used_actuator`.
 
 ## 6) Layer 4: the vendor's description
 
-What the vendor's software says about the image, whole: an `XMLAnnotation` whose root
-element carries `xmlns=""` (or the vendor's own namespace), so its element names cannot be
-taken for OME's, with no XML declaration inside; or a `CommentAnnotation` when it is not
-XML. Its namespace is `https://github.com/ZMB-UZH/ZMART-controller/the_store/1/vendor/<name>`,
-named after the vendor's software. The same content, not the same bytes: an XML parser may
-write it differently. A readable key–value list of it, and anything else that is the
-driver's own (a route, its timing), may go beside it in the same namespace. Nothing in
-ZMART reads layer 4; it is there so nothing the vendor knew is lost.
+What the vendor's software says about the image, whole and byte for byte: a
+`CommentAnnotation` holding its text. (An `XMLAnnotation` would have to rewrite it, and a
+vendor's element names can be taken for OME's.) Its namespace is
+`https://github.com/ZMB-UZH/ZMART-controller/the_store/1/vendor/<name>`, named after the
+vendor's software. A readable key–value list of it, and anything else that is the
+driver's own (how it makes a position from its readings, a route, its timing, changes it
+could not confirm), may go beside it in the same namespace. Nothing in ZMART reads layer
+4; it is there so nothing the vendor knew is lost.
 
 ## 7) Reading a store
 
