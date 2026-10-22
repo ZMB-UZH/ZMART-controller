@@ -29,10 +29,12 @@ records (the controller's state, the vendor's description) that repeat some fact
 layers 1 and 2; a reader takes a fact from the lowest layer that has it, and treats
 layers 3 and 4 as records.
 
-Layer 3 holds what neither standard knows, in the controller's own words (`get_state`,
-`get_xyz`, `acquire`). Like the controller, its shape is the same for every microscope and
+Layer 3 holds what neither standard knows, and only what the controller's contract
+itself defines (`get_state`, `get_xyz`, `acquire`), so it fits every microscope and leans
+on none. How a driver arrives at its numbers (an origin, a calibration, which drives it
+adds up) is the driver's own: it goes in the driver's `observed` state or in layer 4. Like the controller, its shape is the same for every microscope and
 its contents are each microscope's own: the namespaces, the keys of the capture record
-and the coordinate frame, and the structure (`changeable` and `observed`,
+and the image frame, and the structure (`changeable` and `observed`,
 `actuator_readings` and `used_actuator`) are fixed; what is inside `changeable`,
 `observed` and `actuator_readings`, such as a Leica's `job` or its `z-galvo`, is the
 driver's. Layer 4 holds the vendor's words.
@@ -125,22 +127,21 @@ A `CommentAnnotation` holding, as JSON:
 | `acquisition_settings` | `{"asked": ..., "used": ...}`: as `acquire` was given them, and with the `active` value of `get_acquisition_settings` filled in for every setting left out |
 | `started`, `finished` | when the capture began and ended, ISO 8601, UTC |
 | `xyz` | `get_xyz()`'s output when the capture began |
-| `unconfirmed` | the state changes sent for this capture that no reading confirmed, `[{"what": ..., "asked": ..., "read": ...}]`; empty when all were |
 | `driver` | `{"name": ..., "version": ...}` |
 | `controller` | `{"version": ...}` |
 | `derived_from` | for a projection: `{"store": <relative path>, "operation": "max over z"}`; absent otherwise |
 
-### 5.3) The coordinate frame — `…/coordinate-frame`
+### 5.3) The image frame — `…/image-frame`
 
-How the actuator readings become a position (`get_xyz`'s `position`, from the origin, in
-µm), so either can be found from the other. A `MapAnnotation`:
+How the stored image relates to what the microscope scanned. A `MapAnnotation`:
 
 | Key | What |
 |---|---|
-| `x (µm)`, `y (µm)`, `z (µm)` | how each axis's position is made from its actuator readings, for example `z = z-wide + z-galvo − origin z + objective offset z` |
-| `origin x (µm)`, `origin y (µm)`, `origin z (µm)` | the readings at position 0 |
-| `objective offset x (µm)`, `… y`, `… z` | the objective calibration applied |
-| `pixels` | the 2×2 matrix, as JSON `[[a, b], [c, d]]`, that took the scan's (x, y) to the stored (x, y), acting on a column vector: identity, a turn, or a mirror. It is already applied; a reader never applies it again |
+| `pixels` | the 2×2 matrix, as JSON `[[a, b], [c, d]]`, that took the scanned (x, y) to the stored (x, y), acting on a column vector: identity, a turn, or a mirror. It is already applied, so the stored image's axes are the position's axes; a reader never applies it again |
+
+Positions are `get_xyz`'s `position`, in µm. How a driver makes them from its actuator
+readings is its own, and said in its `observed` state or in layer 4; the readings
+themselves are in 5.4.
 
 ### 5.4) The actuator readings — `…/actuator-readings`
 
