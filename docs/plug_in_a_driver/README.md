@@ -76,11 +76,17 @@ connection, nothing else:
     "microscope": "<a name for this particular instrument>",
     "api_type": "<how the vendor software is reached>",
     "host": "<if the vendor software listens on a network address, put it here>",
-    "password": "<if the vendor software requires a password or token, put it here>",
-    "config": "<if the vendor software has a configuration file, put its path here>"
+    "password": "<null if the vendor software requires a password or token: it is typed when connecting, never written here>",
+    "config": "<if the vendor software has a configuration file, put its path here>",
+    "output_root": "<the folder the driver saves under; null when the workflow gives it when connecting>"
   }
 }
 ```
+
+These are the words every client shows when connecting, the same for every
+microscope. Leave out a key your microscope does not need, and a client shows
+it as not needed. A password is never written here: put `null`, and it is
+typed when connecting. `get_instruments` leaves passwords out.
 
 
 ## 3) Writing a driver

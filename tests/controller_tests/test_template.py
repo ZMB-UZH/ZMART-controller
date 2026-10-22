@@ -98,7 +98,8 @@ class PretendDriver(ZmartControllerPlugin):
 def test_the_template_loads_and_offers_every_function():
     driver = zmart_controller.load_driver(TEMPLATE.parent)
     assert driver.NAME.startswith("<the name you want")
-    assert set(driver.CONNECTION) == {"microscope", "api_type", "host", "password", "config"}
+    assert set(driver.CONNECTION) == {"microscope", "api_type", "host", "password", "config", "output_root"}
+    assert "put it here" not in driver.CONNECTION["password"]
     assert driver.ZmartControllerPlugin.__name__ == "ZmartControllerPlugin"
 
 

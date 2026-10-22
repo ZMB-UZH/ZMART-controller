@@ -4,7 +4,8 @@
     "microscope": "<a name for this particular instrument, for example room-42-widefield>",
     "api_type": "<how the vendor software is reached, for example socket, grpc or dll>",
     "host": "<if the vendor software listens on a network address, put it here>",
-    "password": "<if the vendor software requires a password or token, put it here>",
-    "config": "<if the vendor software has a configuration file, put its path here>"
+    "password": "<null if the vendor software requires a password or token: it is typed when connecting, never written here>",
+    "config": "<if the vendor software has a configuration file, put its path here>",
+    "output_root": "<the folder the driver saves under; null when the workflow gives it when connecting>"
   }
 }
