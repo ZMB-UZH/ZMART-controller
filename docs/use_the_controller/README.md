@@ -201,10 +201,10 @@ mic.get_state()
   ```python
   {'success': True,
    'output': {'changeable': {'laser_power': 10.0, 'gain': 100.0, 'exposure_ms': 10.0, 'objective': 1, 'z_planes': 1, 'z_step_um': 1.0},
-              'observed': {'objective': '10x/0.30 Air', 'pixel_size': {'x': 1.0, 'y': 1.0, 'unit': 'um'}, ...}}}
+              'observed': {'objective': '10x/0.30 Air', 'frame': {'size_px': [512, 512], 'pixel_size_um': [1.0, 1.0]}, ...}}}
   ```
 
-- **Note:** A snapshot of the settings, in two parts. `changeable` holds the settings that `set_state` can change. `observed` holds facts you can only read, such as the objective in use and the pixel size. The keys are not standardised. They differ between microscopes, and `get_info` explains them for yours. A state is a plain dictionary. You can save it as JSON and apply it again later.
+- **Note:** A snapshot of the settings, in two parts. `changeable` holds the settings that `set_state` can change. `observed` holds facts you can only read, such as the objective in use. One key is the same on every microscope: `frame`, the picture a capture would take now (`size_px` and `pixel_size_um`), so you can plan before capturing. The other keys are not standardised. They differ between microscopes, and `get_info` explains them for yours. A state is a plain dictionary. You can save it as JSON and apply it again later.
 
 <br>
 

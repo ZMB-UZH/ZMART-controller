@@ -61,7 +61,7 @@ class Scope(ZmartControllerPlugin):
         return self.get_xyz(with_actuators)
 
     def get_state(self):
-        return True, ({}, {})
+        return True, ({}, {"frame": {"size_px": [512, 512], "pixel_size_um": [1.0, 1.0]}})
 
     def get_acquisition_settings(self):
         return True, self.settings

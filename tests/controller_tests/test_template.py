@@ -61,7 +61,10 @@ class PretendDriver(ZmartControllerPlugin):
         return self.get_xyz(with_actuators)
 
     def get_state(self):
-        return True, ({"exposure_ms": self.exposure_ms}, {"objective": "10x"})
+        return True, (
+            {"exposure_ms": self.exposure_ms},
+            {"objective": "10x", "frame": {"size_px": [512, 512], "pixel_size_um": [1.0, 1.0]}},
+        )
 
     def set_state(self, changeable):
         if changeable.get("exposure_ms") == 999.0:  # a value this pretend camera silently ignores

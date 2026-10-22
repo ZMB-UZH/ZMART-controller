@@ -377,6 +377,10 @@ def get_state(handle: MockHandle) -> dict:
                 "unit": "um",
             },
             "software": dict(handle.software),
+            "frame": {
+                "size_px": [int(camera["width"]), int(camera["height"])],
+                "pixel_size_um": [pixel, pixel],
+            },
         },
     }
 

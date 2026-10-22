@@ -106,7 +106,10 @@ class ZmartControllerPlugin:
 
         ``changeable`` holds the settings ``set_state`` applies, such as
         exposure time. ``observed`` holds what can only be read, such as the
-        objective in place.
+        objective in place. One key in it is the same for every microscope:
+        ``frame``, the picture a capture would take now,
+        ``{"size_px": [width, height], "pixel_size_um": [x, y]}``, so a
+        workflow can plan before it captures anything.
         """
         raise NotImplementedError(
             "ZmartControllerPlugin.get_state: return True, (changeable, observed)"

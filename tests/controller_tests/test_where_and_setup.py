@@ -27,6 +27,7 @@ class Scope(ZmartControllerPlugin):
         {"stage": "found, at x 0 y 0 z 0 um", "limits": "pending"},
     )
     settings = {"trigger": {"options": ["snap", "full"], "default": "snap", "active": "snap"}}
+    observed = {"frame": {"size_px": [512, 256], "pixel_size_um": [0.5, 0.5]}}
 
     def __init__(self, connection):
         pass
@@ -50,7 +51,7 @@ class Scope(ZmartControllerPlugin):
         )
 
     def get_state(self):
-        return True, ({}, {})
+        return True, ({}, self.observed)
 
     def get_acquisition_settings(self):
         return True, self.settings
@@ -122,6 +123,32 @@ def test_a_wrong_answer_is_named(info, says):
     problems = validate_driver(scope(info=info), {})
 
     assert any(says in problem for problem in problems), problems
+
+
+def test_the_state_says_the_frame_a_capture_would_have():
+    """Before anything is captured, a workflow can plan: how many pixels, and how large each is."""
+    state = ZmartController(Scope, {}).get_state()["output"]
+
+    assert state["observed"]["frame"] == {"size_px": [512, 256], "pixel_size_um": [0.5, 0.5]}
+    assert validate_driver(Scope, {}) == []
+
+
+@pytest.mark.parametrize(
+    "observed",
+    [
+        {},
+        {"frame": {"size_px": [512, 256]}},
+        {"frame": {"size_px": [512], "pixel_size_um": [0.5, 0.5]}},
+        {"frame": {"size_px": [512, 0], "pixel_size_um": [0.5, 0.5]}},
+        {"frame": {"size_px": [512.5, 256], "pixel_size_um": [0.5, 0.5]}},
+        {"frame": {"size_px": [512, 256], "pixel_size_um": [0.5, -1.0]}},
+        {"frame": {"size_px": [512, 256], "pixel_size_um": [True, 0.5]}},
+    ],
+)
+def test_a_frame_that_is_missing_or_wrong_is_named(observed):
+    problems = validate_driver(scope(observed=observed), {})
+
+    assert any("frame" in problem for problem in problems), problems
 
 
 def test_a_default_may_differ_from_the_active_value():

@@ -254,6 +254,23 @@ def _check_state(output, problems):
         problems.append('get_state: the output must contain "changeable", a dictionary of settings')
     if not isinstance(output, dict) or not isinstance(output.get("observed"), dict):
         problems.append('get_state: the output must contain "observed", a dictionary')
+        return
+    frame = output["observed"].get("frame")
+    sizes = frame.get("size_px") if isinstance(frame, dict) else None
+    pixels = frame.get("pixel_size_um") if isinstance(frame, dict) else None
+    if not (
+        isinstance(sizes, (list, tuple))
+        and len(sizes) == 2
+        and all(isinstance(n, int) and not isinstance(n, bool) and n > 0 for n in sizes)
+        and isinstance(pixels, (list, tuple))
+        and len(pixels) == 2
+        and all(_is_number(size) and size > 0 for size in pixels)
+    ):
+        problems.append(
+            'get_state: "observed" must contain "frame": the picture a capture would take now, '
+            '{"size_px": [width, height], "pixel_size_um": [x, y]}, whole pixels and '
+            "micrometres above 0"
+        )
 
 
 def _check_acquisition_settings(output, problems):

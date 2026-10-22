@@ -268,9 +268,13 @@ def get_state(self):
 | Name | Type | What it is |
 |---|---|---|
 | `changeable` | `dict[str, Any]` | What `set_state` can change, for example `{"exposure_ms": 10.0}`. |
-| `observed` | `dict[str, Any]` | What can only be read, for example `{"objective": "10x"}`. |
+| `observed` | `dict[str, Any]` | What can only be read, for example `{"objective": "10x"}`, and always `frame`. |
 
-The keys are yours to choose. They differ between microscopes, so explain them in `get_info`. Keep the values to what JSON can hold (text, numbers, `True`/`False`, `None`, lists and dictionaries), so that a state can be saved and applied again.
+`observed["frame"]` is the same for every microscope: the picture a capture would take
+now, `{"size_px": [width, height], "pixel_size_um": [x, y]}`. A workflow plans with it
+before anything is captured, for example how far apart to place the tiles of an overview.
+
+The other keys are yours to choose. They differ between microscopes, so explain them in `get_info`. Keep the values to what JSON can hold (text, numbers, `True`/`False`, `None`, lists and dictionaries), so that a state can be saved and applied again.
 
 <br>
 
