@@ -1,13 +1,3 @@
-"""Part 5 of the driver anatomy (``docs/driver-anatomy.md`` in ZMART-drivers): procedures.
-
-A procedure is a recipe of several get and set actions, such as autofocus.
-It never talks to the vendor software directly, so every step passes the
-limits gate and the error rules without any extra effort.
-
-:data:`PROCEDURES` lists them by name, with a plain description; that is what
-``get_procedures`` shows and ``run_procedure`` runs.
-"""
-
 from .autofocus import autofocus
 from .focus_score import brenner
 from .stage import backlash_takeup, record_origin, zero_piezo

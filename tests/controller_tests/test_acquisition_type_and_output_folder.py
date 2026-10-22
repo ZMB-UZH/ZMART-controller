@@ -1,15 +1,3 @@
-"""The two parameters that organise a run: what kind of acquisition it is, and where it goes.
-
-``acquire(position_label, acquisition_type=None, output_folder=None,
-acquisition_settings=None)``. ``acquisition_type`` (for example ``"overview"``) goes
-into the driver's file names and metadata and comes back in the answer; left
-out, it is ``"acquisition"``. ``output_folder`` is where the files go when
-the microscope's software lets the driver choose; a driver whose software
-always saves to its own place says so in ``get_info``
-(``chooses_its_own_folder``) and reports the real paths. Nothing is refused
-for that.
-"""
-
 from __future__ import annotations
 
 import json
@@ -25,9 +13,7 @@ from zmart_controller.zmart_controller import DEFAULT_ACQUISITION_TYPE
 
 
 class Scope(ZmartControllerPlugin):
-    """A driver in memory that saves where it is asked and remembers what acquire was given."""
-
-    own_folder: Path  # where it saves when no output_folder is given; set by each test
+    own_folder: Path
     chooses_its_own_folder = False
 
     def __init__(self, connection):
@@ -71,9 +57,6 @@ class Scope(ZmartControllerPlugin):
 def scope(tmp_path):
     Scope.own_folder = tmp_path / "its own place"
     return Scope
-
-
-# ---- the controller hands both to the driver
 
 
 def test_both_reach_the_driver_and_the_answer_says_the_type(scope, tmp_path):
@@ -130,9 +113,6 @@ def test_get_info_says_whether_the_driver_chooses_its_own_folder(scope):
     assert ZmartController(scope, {}).get_info()["output"]["chooses_its_own_folder"] is False
 
 
-# ---- the validator
-
-
 def test_a_driver_that_takes_both_fits(scope):
     assert validate_driver(scope, {}) == []
 
@@ -176,7 +156,7 @@ def test_an_answer_must_say_its_acquisition_type(tmp_path):
 
 
 def test_files_outside_the_output_folder_are_named(scope, tmp_path):
-    scope.chooses_its_own_folder = True  # it saves in its own place, but does not say so
+    scope.chooses_its_own_folder = True
     session = ZmartController(scope, {})
     answer = session.acquire("A1", output_folder=str(tmp_path / "run"))
 
@@ -220,9 +200,6 @@ def test_a_driver_that_chooses_its_own_folder_still_reports_files_that_exist(tmp
     )
 
     assert problems == ["acquire: files names nowhere.json, which does not exist"]
-
-
-# ---- the mock: its software lets it choose, so it saves where it is asked
 
 
 def test_the_mock_saves_in_the_output_folder_under_the_type(mock, tmp_path):

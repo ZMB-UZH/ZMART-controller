@@ -1,16 +1,3 @@
-"""The set actions: what the driver can change on the microscope.
-
-Each function builds a :class:`SetCommand` (which primitive to send, how to
-confirm it, which limit applies) and hands it to the set dispatcher. None of
-them talks to the hardware any other way.
-
-Every function takes ``ctx``, the connected driver, and returns an
-:class:`Outcome`.
-
-Author: Thom de Hoog, Center for Microscopy and Image Analysis (ZMB),
-University of Zurich (thom.dehoog@zmb.uzh.ch, thomdehoog@gmail.com).
-"""
-
 from __future__ import annotations
 
 from .. import get_actions as get
@@ -18,10 +5,8 @@ from ..configuration import raw_from_user
 from .dispatch import NeverConfirmed, Outcome, SetCommand
 from .tuning import ACQUIRE_TUNING, OBJECTIVE_TUNING
 
-# How close a readback must be to its target to count as arrived, in µm.
 POSITION_TOLERANCE_UM = 0.05
 
-# The piezo's reach: it can only move this far either way from its middle.
 PIEZO_TRAVEL_UM = (-100.0, 100.0)
 
 
@@ -36,16 +21,7 @@ def _not_acquiring(ctx) -> bool:
 
 
 def move(ctx, *, x: float, y: float, focus: float, piezo: float) -> Outcome:
-    """Move every drive to a raw stage position.
-
-    The limits gate checks x and y, and the focus and piezo drives together as
-    one height, before anything is sent.
-    """
-
     def send():
-        # When the stage's reply is lost, the stage may well be moving, so
-        # still send the focus move before reporting the lost reply.
-        # Otherwise the focus would only follow one whole confirmation later.
         lost = None
         try:
             ctx.vendor.move_stage(x=x, y=y)
@@ -77,14 +53,6 @@ def move(ctx, *, x: float, y: float, focus: float, piezo: float) -> Outcome:
 def move_to_user(
     ctx, *, x: float, y: float, z: float, z_actuator: str = "motoric"
 ) -> tuple[Outcome, dict[str, float]]:
-    """Move to a position in user coordinates. Returns the outcome and the raw target.
-
-    ``z_actuator`` chooses the drive that makes the z change: ``"motoric"``
-    (the coarse focus drive, the default) or ``"piezo"`` (fine and quick,
-    but with only ±100 µm of reach). The other drive stays where it is.
-    Raises ``ValueError`` for an unknown actuator, a z change beyond the
-    piezo's reach, or a position outside the limits.
-    """
     if z_actuator not in get.ACTUATORS["z"]:
         raise ValueError(f"unknown actuator {z_actuator!r} for axis 'z'")
     here = get.raw_position(ctx).value_or_raise("the current position")
@@ -105,7 +73,6 @@ def move_to_user(
 
 
 def set_setting(ctx, name: str, value: float) -> Outcome:
-    """Change one setting, by its ZMART name (``laser_power``, ``gain`` or ``exposure_ms``)."""
     if name not in get.SETTING_NAMES:
         raise ValueError(f"unknown setting {name!r}; known: {list(get.SETTING_NAMES)}")
     if isinstance(value, bool) or not isinstance(value, (int, float)):
@@ -129,7 +96,6 @@ def set_setting(ctx, name: str, value: float) -> Outcome:
 
 
 def set_objective(ctx, slot: int) -> Outcome:
-    """Change the objective. Waits until the focus drives are still before sending."""
     if isinstance(slot, bool) or not isinstance(slot, int):
         raise ValueError(f"objective must be a slot number, not {slot!r}")
 
@@ -150,16 +116,8 @@ def set_objective(ctx, slot: int) -> Outcome:
 
 
 def acquire(ctx, *, name: str, z_planes: int = 1, z_step_um: float = 1.0) -> Outcome:
-    """Take an image (or a z-stack upwards from here) and wait until it is written.
-
-    The outcome's ``result`` is the vendor's raw file. Acquisitions are never
-    sent twice by the dispatcher: a second image would be taken.
-    """
     here = get.raw_position(ctx).value_or_raise("the current position")
     z_top = here["z"] + (z_planes - 1) * z_step_um
-    # The file of the acquisition before this one. When the reply naming our
-    # file is lost, an acquisition only counts as ours if it is a new one:
-    # an older image with the same name must never be taken for this one.
     before = get.status(ctx).value_or_raise("the status")["last_acquisition"]
     previous_file = before["file"] if before is not None else None
     found: dict[str, str] = {}
@@ -171,7 +129,7 @@ def acquire(ctx, *, name: str, z_planes: int = 1, z_step_um: float = 1.0) -> Out
         last = reading.value["last_acquisition"]
         if file is not None:
             ours = last is not None and last["file"] == file
-        else:  # the reply was lost: recognise it as a new acquisition with our name
+        else:
             ours = last is not None and last["file"] != previous_file and last["name"] == name
         if ours and last["state"] == "done":
             found["file"] = last["file"]
@@ -193,17 +151,11 @@ def acquire(ctx, *, name: str, z_planes: int = 1, z_step_um: float = 1.0) -> Out
         )
     )
     if outcome.confirmed and outcome.result is None:
-        outcome.result = found["file"]  # learned from the readback after a lost reply
+        outcome.result = found["file"]
     return outcome
 
 
 def stop(ctx) -> Outcome:
-    """Stop every movement and any acquisition, where they are now.
-
-    Stopping is the one change the limits never block: it can only make
-    things safer.
-    """
-
     def confirm(_result) -> bool:
         reading = get.status(ctx)
         return reading.known and reading.value["state"] in ("idle", "changing_objective")

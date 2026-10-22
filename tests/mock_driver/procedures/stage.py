@@ -1,10 +1,3 @@
-"""Procedures that only move drives: taking up backlash, parking the piezo, and
-recording the origin.
-
-Author: Thom de Hoog, Center for Microscopy and Image Analysis (ZMB),
-University of Zurich (thom.dehoog@zmb.uzh.ch, thomdehoog@gmail.com).
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -13,7 +6,6 @@ from .. import get_actions as get
 from .. import set_actions as setter
 from ..configuration import sample_point, save
 
-# How far back the backlash takeup steps before approaching again, in µm.
 BACKLASH_STEP_UM = 50.0
 
 
@@ -23,16 +15,6 @@ def _require(outcome, what: str) -> None:
 
 
 def backlash_takeup(ctx) -> dict[str, Any]:
-    """Step back a little in x and y, then approach the same position again.
-
-    A stage's screws have a little play. Arriving from the same side every
-    time takes that play up in the same direction, so a position visited
-    twice is visited exactly.
-
-    Close to the lower edge of the travel range, the step back is shortened
-    so that it stays inside the limits; right at the edge, that axis is not
-    stepped back at all. It says how far each axis stepped back.
-    """
     here = get.raw_position(ctx).value_or_raise("the current position")
     stage = ctx.config.limits["stage_um"]
     step = {
@@ -55,7 +37,6 @@ def backlash_takeup(ctx) -> dict[str, Any]:
 
 
 def zero_piezo(ctx) -> dict[str, Any]:
-    """Hand the piezo's share of the height over to the coarse drive."""
     here = get.raw_position(ctx).value_or_raise("the current position")
     outcome = setter.move(ctx, x=here["x"], y=here["y"], focus=here["z"], piezo=0.0)
     _require(outcome, "parking the piezo")
@@ -63,12 +44,6 @@ def zero_piezo(ctx) -> dict[str, Any]:
 
 
 def record_origin(ctx) -> dict[str, float]:
-    """Save the current position as the origin, (0, 0, 0), for every later session.
-
-    This is a setup step for the operator, not part of an experiment, which
-    is why it is not offered through ``run_procedure``. It takes effect at
-    the next connect. Returns the saved origin.
-    """
     here = get.raw_position(ctx).value_or_raise("the current position")
     origin = sample_point(here, here["objective"], ctx.config)
     save("origin", origin, ctx.identity)

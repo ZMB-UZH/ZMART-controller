@@ -1,14 +1,3 @@
-"""Tests for the mock API: the pretend vendor software behind the mock driver.
-
-These check that MockScope behaves like vendor software should, so that a
-driver tested against it meets the same situations it will meet on a real
-microscope: commands that take time, refusals while busy, files written in
-two steps, and every kind of fault.
-
-Author: Thom de Hoog, Center for Microscopy and Image Analysis (ZMB),
-University of Zurich (thom.dehoog@zmb.uzh.ch, thomdehoog@gmail.com).
-"""
-
 from __future__ import annotations
 
 import pytest
@@ -34,7 +23,6 @@ def _result(reply):
 
 
 def _picture(scope, clock, name, **arguments):
-    """Acquire, wait until done, and return the file's description and its planes."""
     file = _result(scope.send("StartAcquisition", name=name, **arguments))["file"]
     clock.advance(10.0)
     assert _result(scope.send("GetStatus"))["last_acquisition"]["state"] == "done"
@@ -43,7 +31,6 @@ def _picture(scope, clock, name, **arguments):
 
 
 def _brenner(plane, width):
-    """A simple sharpness score: large when neighbouring pixels differ a lot."""
     total = 0
     for row in range(len(plane) // width):
         line = plane[row * width : (row + 1) * width]
@@ -114,7 +101,7 @@ class TestTime:
     def test_a_move_takes_time(self, scope, clock):
         _result(scope.send("MoveStage", x=START_POSITION["x"] + 10_000.0))
         assert _result(scope.send("GetStatus"))["state"] == "moving"
-        clock.advance(0.1)  # halfway at 50 mm/s
+        clock.advance(0.1)
         halfway = _result(scope.send("GetStagePosition"))["x"]
         assert START_POSITION["x"] < halfway < START_POSITION["x"] + 10_000.0
         clock.advance(1.0)
@@ -169,8 +156,6 @@ class TestAcquisition:
             read_mraw(file)
         assert _result(scope.send("GetStatus"))["state"] == "acquiring"
         clock.advance(1.0)
-        # Time only moves on for the pretend microscope when it is asked
-        # something, so ask for the status before reading the file.
         assert _result(scope.send("GetStatus"))["last_acquisition"]["state"] == "done"
         header, planes = read_mraw(file)
         assert header["planes"] == 3 and len(planes) == 3
@@ -226,11 +211,10 @@ class TestPictures:
         mock.send("Login", token="mock-token")
         header, before = _picture(mock, clock, "before")
         width, height, pixel = header["width"], header["height"], header["pixel_size_um"]
-        step = 5  # pixels
+        step = 5
         _result(mock.send("MoveStage", x=START_POSITION["x"] + step * pixel))
         clock.advance(1.0)
         _, after = _picture(mock, clock, "after")
-        # A stage step of +x shows up in the picture as this many pixels.
         (a, b), _ = orientation
         shift_col, shift_row = -a * step, -b * step
         compared = 0
@@ -285,7 +269,6 @@ class TestFaults:
         scope.faults.add("MoveStage", fault)
         assert scope.send("MoveStage", x=1_000.0)["code"] == code
         assert _result(scope.send("GetStagePosition"))["x"] == START_POSITION["x"]
-        # The fault was used up; the next try works.
         _result(scope.send("MoveStage", x=1_000.0))
 
     def test_timeout_applies_but_loses_the_reply(self, scope, clock):

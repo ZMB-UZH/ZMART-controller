@@ -1,15 +1,3 @@
-"""One kind of driver: a ``ZmartControllerPlugin`` class, asked by name, answered with ``output``.
-
-Every driver is a class. The controller asks it for the values, handing every
-value over by name, and writes every answer itself as
-``{"success": ..., "output": ...}``, so the same call behaves the same on every
-microscope. ``acquire`` takes ``position_label``, ``acquisition_type``,
-``output_folder`` and ``acquisition_settings``, in that order.
-
-Author: Thom de Hoog, Center for Microscopy and Image Analysis (ZMB),
-University of Zurich (thom.dehoog@zmb.uzh.ch, thomdehoog@gmail.com).
-"""
-
 from __future__ import annotations
 
 import inspect
@@ -29,8 +17,6 @@ CANVAS = (-10.0, 10.0, -10.0, 10.0, -5.0, 5.0)
 
 
 class KeywordOnly(ZmartControllerPlugin):
-    """A plugin whose methods take every value by name only, and remember what they were given."""
-
     def __init__(self, connection):
         self.asked = {}
 
@@ -146,8 +132,6 @@ class TestAcquireOrder:
 
 
 class TestAskedByName:
-    """The plugin above takes every value by name only, in its own order; nothing is mixed up."""
-
     def test_every_value_reaches_the_plugin_by_name(self, session):
         session.set_xyz(4, 5, 6, with_actuators={"z": "motoric"})
         session.set_state({"changeable": {"exposure_ms": 20.0}})
@@ -196,8 +180,6 @@ class TestOnlyClasses:
 
 
 class TestTheSameOnEveryDriver:
-    """Every command, called by position and by name, on the mock and on a class in memory."""
-
     CALLS = {
         "get_info": ((), {}),
         "get_actuators": ((), {}),

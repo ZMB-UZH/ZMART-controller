@@ -1,11 +1,3 @@
-"""Part 3 of the driver anatomy (``docs/driver-anatomy.md`` in ZMART-drivers): get actions and the get dispatcher.
-
-A get command asks the microscope something and never changes anything. The
-get dispatcher is the engine behind every one of them: it lets one read
-through at a time, tries again after a temporary problem, keeps to a time
-limit, and answers "unknown" rather than guessing.
-"""
-
 from .commands import (
     ACTUATORS,
     SETTING_NAMES,

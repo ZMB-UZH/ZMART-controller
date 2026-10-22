@@ -1,9 +1,3 @@
-"""Tests for the utilities: the configuration folder, and checking a driver against the contract.
-
-Author: Thom de Hoog, Center for Microscopy and Image Analysis (ZMB),
-University of Zurich (thom.dehoog@zmb.uzh.ch, thomdehoog@gmail.com).
-"""
-
 from __future__ import annotations
 
 import json
@@ -35,11 +29,7 @@ class TestConfigRoot:
         assert registry.config_root() == registry.Path("/etc/zmart-microscopy")
 
 
-# ---- validate_driver: does a driver fit the contract?
-
-
 def break_plugin(monkeypatch, name, method):
-    """Swap one of the mock plugin's methods for a broken one, for this test only."""
     monkeypatch.setattr(MockPlugin, name, method)
 
 
@@ -48,13 +38,6 @@ def test_the_mock_fits(mock):
 
 
 def xyz_with(**per_axis):
-    """A plugin ``get_xyz`` whose values for one or more axes are changed.
-
-    Each keyword names an axis and gives a dict of the values to change:
-    ``position``, ``actuator_readings`` or ``canvas``. An axis left out is at 0.0
-    micrometres, reads one motor, and has a canvas of [-150, 150].
-    """
-
     def get_xyz(self, with_actuators):
         values = {
             axis: {
@@ -75,8 +58,6 @@ def xyz_with(**per_axis):
 
 
 def info_with(description):
-    """A plugin ``get_info`` that describes the microscope with ``description``."""
-
     def get_info(self):
         return True, (description, {}, False, {})
 
@@ -84,7 +65,6 @@ def info_with(description):
 
 
 def test_problems_are_named(monkeypatch, mock):
-    # Break two answers and expect plain sentences about those two, nothing else.
     break_plugin(monkeypatch, "get_xyz", xyz_with(y={"position": "10"}))
     break_plugin(monkeypatch, "get_info", info_with(""))
     assert validate_driver(mock) == [
@@ -135,20 +115,11 @@ def test_the_mock_describes_itself(mock):
     assert isinstance(description, str) and len(description) > 200
     for word in ("stage", "objective", "exposure", "laser"):
         assert word in description.lower(), word
-    # The bounds are this microscope's configured limits, not the software's widest ones.
     for bounds in ("0 to 50", "0 to 800", "0.1 to 1000"):
         assert bounds in description, bounds
 
 
-# ---- check_acquire_answer: does an acquisition say where its files are?
-
-
 def acquire_on_the_mock(mock, connection=None, **stack):
-    """Acquire once on the mock and return its answer, as a driver's own test would.
-
-    A ``stack`` (``z_planes``, ``z_step_um``) is set as state and taken with
-    the ``full`` trigger; without one, the mock snaps one plane.
-    """
     session = ZmartController(mock, connection)
     try:
         if not stack:
@@ -165,7 +136,6 @@ def _answer(**content):
 
 
 def _plane(path, **entries):
-    """One plane entry as the contract describes it, with any entry replaced."""
     return {
         "path": str(path),
         "c": 0,
@@ -180,7 +150,6 @@ def _plane(path, **entries):
 
 @pytest.fixture
 def saved(tmp_path):
-    """One saved image file, as an acquisition leaves it."""
     path = tmp_path / "A1.ome.tif"
     path.write_bytes(b"")
     return path
@@ -235,9 +204,6 @@ def test_a_failed_acquisition_may_list_no_files():
     answer = _answer(files=[], planes=[], reason="the image never arrived")
     answer["success"] = False
     assert check_acquire_answer(answer) == []
-
-
-# ---- planes: which channel, depth and stage position each saved image is
 
 
 def test_the_mock_describes_every_plane_of_a_stack(mock):
@@ -303,11 +269,7 @@ def test_every_plane_says_where_it_is(saved):
     ]
 
 
-# ---- a z-stack: each slice at its own height, counted upwards
-
-
 def _stack(saved, heights, channels=1):
-    """The planes of one stack: every channel of slice z at heights[z]."""
     return [
         _plane(saved, c=c, z=z, z_um=height)
         for z, height in enumerate(heights)
@@ -378,9 +340,6 @@ def test_the_label_must_come_back():
 def test_an_acquisition_without_the_envelope_is_reported():
     problems = check_acquire_answer({"files": []})
     assert problems == ['acquire must return {"success": ..., "output": ...}, got dict']
-
-
-# ---- the drivers installed on this computer
 
 
 def test_get_instruments_shows_each_connection_as_written(tmp_path):

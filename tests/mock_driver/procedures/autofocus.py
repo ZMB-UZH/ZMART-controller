@@ -1,14 +1,3 @@
-"""Autofocus: find the sharpest height and move there.
-
-The recipe: take a short z-stack around the current height, score every
-plane with the Brenner focus score, and move the focus to the best plane.
-Every step is an ordinary set or get command, so the stack can never reach
-outside the limits.
-
-Author: Thom de Hoog, Center for Microscopy and Image Analysis (ZMB),
-University of Zurich (thom.dehoog@zmb.uzh.ch, thomdehoog@gmail.com).
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -19,20 +8,10 @@ from ..configuration import user_from_raw
 from ..data_handling import wait_for_file
 from .focus_score import brenner
 
-# Counts the autofocus runs in this session, so that each run's z-stack gets
-# a file name of its own in the vendor software.
 _runs = 0
 
 
 def autofocus(ctx, *, range_um: float = 20.0, step_um: float = 2.0) -> dict[str, Any]:
-    """Search ``range_um`` around the current height in steps of ``step_um``.
-
-    Returns ``{"ran", "focus_um", "z_um", "scores"}``: the height of
-    sharpest focus in stage coordinates, the same height in user
-    coordinates, and the score
-    of every plane. Raises ``ValueError`` for a range or step that makes no
-    sense, or a stack outside the limits.
-    """
     global _runs
     if not step_um > 0 or not range_um >= step_um:
         raise ValueError("autofocus needs step_um above 0 and range_um at least step_um")

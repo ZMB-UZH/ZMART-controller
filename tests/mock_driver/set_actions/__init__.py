@@ -1,12 +1,3 @@
-"""Part 4 of the driver anatomy (``docs/driver-anatomy.md`` in ZMART-drivers): set actions and the set dispatcher.
-
-A set command changes the microscope: a move, a setting, an objective, an
-acquisition. Every one of them runs through the set dispatcher, which checks
-the limits first, sends the command, tries again after a temporary problem,
-and then confirms through the get dispatcher that the change really
-happened. When it cannot confirm it, it says so instead of pretending.
-"""
-
 from .commands import acquire, move, move_to_user, set_objective, set_setting, stop
 from .dispatch import NeverConfirmed, Outcome, SetCommand, SetDispatcher
 from .gate import Gate

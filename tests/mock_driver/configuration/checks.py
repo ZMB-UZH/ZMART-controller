@@ -1,14 +1,3 @@
-"""What the checks of every configuration item share.
-
-A configuration file decides where the stage may go, so a mistake in it must
-be caught when the driver connects, not halfway through an experiment. Each
-check raises ``ValueError`` with the file name and a plain description of the
-problem.
-
-Author: Thom de Hoog, Center for Microscopy and Image Analysis (ZMB),
-University of Zurich (thom.dehoog@zmb.uzh.ch, thomdehoog@gmail.com).
-"""
-
 from __future__ import annotations
 
 import math

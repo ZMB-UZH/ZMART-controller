@@ -1,57 +1,3 @@
-"""MockScope Control: pretend vendor software for a pretend microscope.
-
-A ZMART driver is built on top of the software that comes with a
-microscope. This module plays that role for the mock microscope. It is the *mock API* from the driver
-anatomy: the stand-in at the very bottom of a driver, below the vendor
-interface, so that every part above it can be built and tested on a laptop.
-
-To be a useful stand-in it behaves like vendor software, not like ZMART:
-
-- **It speaks its own language.** Commands have their own names
-  (``MoveStage``, ``SetSetting``, ``StartAcquisition``), positions are raw
-  stage micrometres with no origin, and focus is split over two drives, a
-  coarse ``focus`` drive and a fine ``piezo``. The driver's vendor interface
-  has to translate.
-- **It answers with status codes.** Every command returns a reply,
-  ``{"ok": True, "result": {...}}`` or ``{"ok": False, "code": 201,
-  "message": "..."}``, and the driver's error handling has to sort the codes
-  and messages into kinds.
-- **Things take time.** A move is accepted at once but finishes later, so
-  reading the position straight away shows the stage still travelling. A
-  driver has to confirm that a command really took effect.
-- **It refuses while busy.** During an acquisition, moves and setting
-  changes are refused with error 100.
-- **It writes its own file format.** Acquisitions are saved as ``.mraw``
-  files (see :mod:`.mraw`), written in two steps, so a driver has to wait
-  until a file is complete.
-- **It can fail on purpose.** :attr:`MockScope.faults` makes the next command
-  fail in a chosen way (see :mod:`.faults`).
-
-Time
-----
-The pretend microscope does not run in the background. Instead, every
-command first catches up with the time that has passed since the last one:
-moves that should be finished are finished, and acquisitions that should be
-done are written. With the normal clock this follows real time. For exact,
-fast tests, pass a :class:`FakeClock` and move time forward yourself with
-``clock.advance(seconds)``.
-
-A short example::
-
-    from mock_driver.testing.mock_api import FakeClock, MockScope
-
-    clock = FakeClock()
-    scope = MockScope(output_folder="images", clock=clock)
-    scope.send("Login", token="mock-token")
-    scope.send("MoveStage", x=51_000.0)        # accepted; the stage starts moving
-    scope.send("GetStatus")["result"]["state"] # "moving"
-    clock.advance(1.0)
-    scope.send("GetStagePosition")["result"]   # {"x": 51000.0, "y": 37500.0}
-
-Author: Thom de Hoog, Center for Microscopy and Image Analysis (ZMB),
-University of Zurich (thom.dehoog@zmb.uzh.ch, thomdehoog@gmail.com).
-"""
-
 from __future__ import annotations
 
 import copy
@@ -67,51 +13,35 @@ from . import mraw
 from .faults import Faults
 from .sample import Tilt, render
 
-# What the pretend vendor software reports about itself and its microscope.
 SOFTWARE = "MockScope Control"
 VERSION = "2.4.1"
 SERIAL = "MOCK-0001"
 
-# How far each drive can travel, in raw micrometres. The vendor software
-# refuses anything outside these with error 201. These are the hardware's
-# own end stops, wider than the limits an operator sets in ZMART.
 STAGE_TRAVEL: dict[str, tuple[float, float]] = {"x": (0.0, 100_000.0), "y": (0.0, 75_000.0)}
 FOCUS_TRAVEL: dict[str, tuple[float, float]] = {"focus": (0.0, 10_000.0), "piezo": (-100.0, 100.0)}
 
-# Where the drives are when the software starts: the middle of the slide.
 START_POSITION: dict[str, float] = {"x": 50_000.0, "y": 37_500.0, "focus": 5_000.0, "piezo": 0.0}
 
-# The settings SetSetting can change, with their allowed range and start value.
 SETTINGS: dict[str, dict[str, float]] = {
     "laser_power_percent": {"min": 0.0, "max": 100.0, "start": 10.0},
     "detector_gain": {"min": 0.0, "max": 1000.0, "start": 100.0},
     "exposure_ms": {"min": 0.1, "max": 10_000.0, "start": 10.0},
 }
 
-# The objectives in the turret. The vendor software reports these facts.
 OBJECTIVES: dict[int, dict[str, Any]] = {
     1: {"name": "10x/0.30 Air", "magnification": 10, "pixel_size_um": 1.0},
     2: {"name": "20x/0.75 Air", "magnification": 20, "pixel_size_um": 0.5},
     3: {"name": "40x/0.95 Air", "magnification": 40, "pixel_size_um": 0.25},
 }
 
-# What the vendor software does NOT report: how far each objective's view is
-# shifted from objective 1, in micrometres. Optical calibration has to
-# measure these.
 OBJECTIVE_OFFSETS_UM: dict[int, dict[str, float]] = {
     1: {"x": 0.0, "y": 0.0, "z": 0.0},
     2: {"x": 3.0, "y": -2.0, "z": 1.5},
     3: {"x": -4.0, "y": 5.5, "z": -2.5},
 }
 
-# How the camera sits on the stage, as a small table ((a, b), (c, d)). A step
-# of u micrometres to the right in the picture and v micrometres down is a
-# stage step of (a*u + b*v) in x and (c*u + d*v) in y. The default is a
-# mirror image: right in the picture is +y on the stage, and down is +x.
-# Image-to-stage registration has to find this.
 DEFAULT_ORIENTATION: tuple[tuple[int, int], tuple[int, int]] = ((0, 1), (1, 0))
 
-# How quickly things happen. All in seconds or micrometres per second.
 DEFAULT_TIMING: dict[str, float] = {
     "stage_speed_um_s": 50_000.0,
     "focus_speed_um_s": 2_000.0,
@@ -122,7 +52,6 @@ DEFAULT_TIMING: dict[str, float] = {
     "plane_s": 0.02,
 }
 
-# Every error code the software can answer with.
 ERRORS: dict[int, str] = {
     100: "System busy, try again later",
     200: "Unknown command",
@@ -138,7 +67,6 @@ ERRORS: dict[int, str] = {
     999: "Internal error 0x7F3A",
 }
 
-# For every command: the arguments it needs, and those it may take.
 COMMANDS: dict[str, tuple[frozenset[str], frozenset[str]]] = {
     "GetVersion": (frozenset(), frozenset()),
     "Login": (frozenset({"token"}), frozenset()),
@@ -158,22 +86,14 @@ COMMANDS: dict[str, tuple[frozenset[str], frozenset[str]]] = {
     "Abort": (frozenset(), frozenset()),
 }
 
-# Commands that work without logging in first.
 _OPEN_COMMANDS = frozenset({"GetVersion", "Login"})
 
-# Argument values that must never appear in the command history.
 _SECRET_ARGUMENTS = frozenset({"token"})
 
 _NAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{1,100}$")
 
 
 class FakeClock:
-    """A clock that only moves when you tell it to.
-
-    Hand it to :class:`MockScope` to make tests exact and fast: nothing
-    happens between two commands unless the test calls :meth:`advance`.
-    """
-
     def __init__(self, start: float = 0.0) -> None:
         self.now = float(start)
 
@@ -181,15 +101,12 @@ class FakeClock:
         return self.now
 
     def advance(self, seconds: float) -> None:
-        """Let ``seconds`` pass."""
         if seconds < 0:
             raise ValueError("time only moves forward")
         self.now += seconds
 
 
 class _Refusal(Exception):
-    """Raised inside a command to answer with an error code."""
-
     def __init__(self, code: int, detail: str = "") -> None:
         super().__init__(code, detail)
         self.code = code
@@ -197,13 +114,6 @@ class _Refusal(Exception):
 
 
 class _Drives:
-    """A group of drives that move together, such as the stage's x and y.
-
-    A move starts at the current position and ends at the target after a
-    set time. In between, the position is read part of the way there, as a
-    real stage would be.
-    """
-
     def __init__(self, positions: dict[str, float]) -> None:
         self.start = dict(positions)
         self.target = dict(positions)
@@ -236,7 +146,6 @@ class _Drives:
 
 
 def _check_orientation(orientation) -> tuple[tuple[int, int], tuple[int, int]]:
-    """Accept only a 90° turn or a mirror image, the ways a camera can sit."""
     (a, b), (c, d) = orientation
     entries = (a, b, c, d)
     if any(value not in (-1, 0, 1) for value in entries) or abs(a * d - b * c) != 1:
@@ -249,21 +158,6 @@ def _check_orientation(orientation) -> tuple[tuple[int, int], tuple[int, int]]:
 
 
 class MockScope:
-    """The pretend vendor software, with the pretend microscope behind it.
-
-    ``output_folder`` is where acquisitions are written; it must exist.
-    ``token`` is the password that ``Login`` expects. ``clock`` is a function
-    returning the time in seconds; pass a :class:`FakeClock` for exact
-    tests. ``image_size`` is the camera's ``(width, height)`` in pixels.
-    ``orientation``, ``objective_offsets`` and ``tilt`` set the hidden facts
-    that the setup step has to measure (see :meth:`truth`). ``seed`` chooses the
-    pattern of spots on the slide. ``noise=False`` gives clean pictures.
-    ``timing`` overrides any of :data:`DEFAULT_TIMING`.
-
-    Send commands with :meth:`send`. Make it misbehave with :attr:`faults`.
-    Every command sent is recorded in :attr:`history`.
-    """
-
     def __init__(
         self,
         *,
@@ -316,28 +210,12 @@ class MockScope:
 
     @classmethod
     def instant(cls, **kwargs) -> MockScope:
-        """A MockScope where everything happens at once: no travel time, no waiting.
-
-        Handy when a test is about something other than timing.
-        """
         timing = {key: 0.0 for key in DEFAULT_TIMING if not key.endswith("speed_um_s")}
         timing.update({key: math.inf for key in DEFAULT_TIMING if key.endswith("speed_um_s")})
         timing.update(kwargs.pop("timing", None) or {})
         return cls(timing=timing, **kwargs)
 
-    # --- the one way in -----------------------------------------------------
-
     def send(self, command: str, **arguments: Any) -> dict[str, Any]:
-        """Send one command and return the software's reply.
-
-        The reply is ``{"ok": True, "result": {...}}`` when the command was
-        accepted, or ``{"ok": False, "code": ..., "message": ...}`` when it
-        was refused. "Accepted" means the software took it on, not that it
-        has finished: read back to find out.
-
-        Raises ``ConnectionError`` when the software is not running, and
-        ``TimeoutError`` when the reply is lost (only through a fault).
-        """
         if not self._running:
             raise ConnectionError(f"{SOFTWARE} is not running")
         now = self._clock()
@@ -391,7 +269,6 @@ class MockScope:
             raise _Refusal(204, ", ".join(sorted(unknown)))
 
     def _record(self, now, command, arguments, reply, fault) -> None:
-        # Keep the names of secret arguments, never their values.
         shown = {
             key: ("<hidden>" if key in _SECRET_ARGUMENTS else value)
             for key, value in arguments.items()
@@ -407,10 +284,7 @@ class MockScope:
             }
         )
 
-    # --- the passing of time -----------------------------------------------
-
     def _catch_up(self, now: float) -> None:
-        """Finish whatever should have finished by now."""
         still_waiting = []
         for due, name, value in self._pending_settings:
             if now >= due:
@@ -442,8 +316,6 @@ class MockScope:
         if self._state(now) == "acquiring":
             raise _Refusal(100, "an acquisition is running")
 
-    # --- connection ---------------------------------------------------------
-
     def _cmd_GetVersion(self, now):
         return {"software": SOFTWARE, "version": VERSION}
 
@@ -458,22 +330,14 @@ class MockScope:
         return {"session": "closed"}
 
     def shutdown(self) -> None:
-        """Pretend the vendor software was closed. Every later command raises ``ConnectionError``."""
         self._running = False
         self._logged_in = False
 
     def restart(self) -> None:
-        """Start the vendor software again after :meth:`shutdown` or a ``disconnect`` fault.
-
-        The microscope keeps its position and settings, but the session is
-        new: log in again. An acquisition that was running is lost.
-        """
         self._running = True
         self._logged_in = False
         if self._acquisition is not None and self._acquisition["state"] == "running":
             self._acquisition["state"] = "aborted"
-
-    # --- reading ------------------------------------------------------------
 
     def _cmd_GetHardware(self, now):
         return {
@@ -515,8 +379,6 @@ class MockScope:
 
     def _cmd_GetOutputFolder(self, now):
         return {"folder": str(self._output_folder)}
-
-    # --- changing -----------------------------------------------------------
 
     def _cmd_MoveStage(self, now, **target):
         self._refuse_if_acquiring(now)
@@ -579,15 +441,11 @@ class MockScope:
         return {"accepted": "SetOutputFolder"}
 
     def _cmd_Abort(self, now):
-        """Stop every movement and any acquisition, where they are now."""
         self._stage.stop(now)
         self._focus.stop(now)
         if self._acquisition is not None and self._acquisition["state"] == "running":
-            # The file keeps its description line but never gets its pixels.
             self._acquisition["state"] = "aborted"
         return {"accepted": "Abort"}
-
-    # --- acquiring ----------------------------------------------------------
 
     def _cmd_StartAcquisition(self, now, name, z_planes=1, z_step_um=1.0):
         state = self._state(now)
@@ -640,7 +498,6 @@ class MockScope:
         return {"accepted": "StartAcquisition", "file": str(path)}
 
     def _free_file_name(self, name: str) -> Path:
-        """Never overwrite: add _001, _002, ... the way much vendor software does."""
         path = self._output_folder / f"{name}.mraw"
         number = 0
         while path.exists():
@@ -691,16 +548,7 @@ class MockScope:
         mraw.append_planes(acquisition["path"], planes)
         acquisition["state"] = "done"
 
-    # --- the hidden answers -------------------------------------------------
-
     def truth(self) -> dict[str, Any]:
-        """The facts a real microscope never reports, for checking setup work.
-
-        Returns the camera ``orientation``, the ``objective_offsets_um``
-        (relative to objective 1), the slide ``tilt``, and the ``seed`` of the
-        spot pattern. A test can compare what the setup step measured with
-        these answers.
-        """
         return {
             "orientation": self._orientation,
             "objective_offsets_um": copy.deepcopy(self._offsets),
@@ -716,7 +564,6 @@ class MockScope:
 
 
 def _number(name: str, value: Any) -> float:
-    """Accept a plain, finite number; refuse anything else with error 205."""
     if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
         raise _Refusal(205, f"{name} must be a number")
     return float(value)

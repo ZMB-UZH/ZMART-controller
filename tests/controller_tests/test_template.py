@@ -1,9 +1,3 @@
-"""Tests for the driver's plugin: the template to copy, and the controller that drives it.
-
-Author: Thom de Hoog, Center for Microscopy and Image Analysis (ZMB),
-University of Zurich (thom.dehoog@zmb.uzh.ch, thomdehoog@gmail.com).
-"""
-
 from __future__ import annotations
 
 import json
@@ -25,9 +19,7 @@ TEMPLATE = Path(zmart_controller.template.__file__).parent / "zmart_controller_p
 
 
 class PretendDriver(ZmartControllerPlugin):
-    """A ZmartControllerPlugin filled in for a microscope that lives in memory."""
-
-    folder: Path  # set by the test before connecting
+    folder: Path
 
     def __init__(self, connection):
         self.position = {"x": 0.0, "y": 0.0, "z": 0.0}
@@ -67,7 +59,7 @@ class PretendDriver(ZmartControllerPlugin):
         )
 
     def set_state(self, changeable):
-        if changeable.get("exposure_ms") == 999.0:  # a value this pretend camera silently ignores
+        if changeable.get("exposure_ms") == 999.0:
             return False, "exposure_ms stayed 10.0"
         if changeable.get("exposure_ms") == -1.0:
             raise ValueError("exposure_ms must be positive")
@@ -98,7 +90,14 @@ class PretendDriver(ZmartControllerPlugin):
 def test_the_template_loads_and_offers_every_function():
     driver = zmart_controller.load_driver(TEMPLATE.parent)
     assert driver.NAME.startswith("<the name you want")
-    assert set(driver.CONNECTION) == {"microscope", "api_type", "host", "password", "config", "output_root"}
+    assert set(driver.CONNECTION) == {
+        "microscope",
+        "api_type",
+        "host",
+        "password",
+        "config",
+        "output_root",
+    }
     assert driver.CONNECTION["password"] is None
     assert driver.ZmartControllerPlugin.__name__ == "ZmartControllerPlugin"
 
@@ -160,15 +159,13 @@ def test_a_copied_template_is_installed_from_the_drivers_folder(tmp_path):
         assert list(zmart_controller.get_instruments()) == ["my-scope-2"]
         shown = zmart_controller.get_instruments()["my-scope-2"]
         assert shown["host"] == "127.0.0.1" and shown["password"] is None
-        with pytest.raises(NotImplementedError):  # it connects through the class
+        with pytest.raises(NotImplementedError):
             zmart_controller.ZmartController("my-scope-2")
     finally:
         zmart_controller.remove_driver("my-scope-2")
 
 
 def test_the_readme_names_every_driver_method():
-    """The driver guide shows each method a driver must offer, so a new or renamed
-    method in the template cannot go unmentioned in the guide."""
     text = README.read_text()
     for name in dir(ZmartControllerPlugin):
         if not name.startswith("_"):

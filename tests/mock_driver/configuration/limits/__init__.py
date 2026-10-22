@@ -1,9 +1,3 @@
-"""Limits: how far the stage may travel, and the allowed range of each setting.
-
-``default.json`` beside this file is what the driver ships; ``check``
-refuses a malformed value, saying which file and what is wrong.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -12,7 +6,6 @@ from ..checks import AXES, SETTING_NAMES, _fail, _keys, _span
 
 
 def check(value: Any, where: str) -> None:
-    """Refuse a malformed the limits, naming the file (``where``) and what is wrong."""
     _keys(value, {"stage_um", "settings", "objectives", "acquisition"}, where)
     _keys(value["stage_um"], set(AXES), f"{where} (stage_um)")
     for axis in AXES:

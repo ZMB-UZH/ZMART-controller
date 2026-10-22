@@ -1,13 +1,3 @@
-"""The defaults a driver names, and acquisition settings that say how to trigger.
-
-The driver decides every default and the answers say it: ``get_actuators``
-names the default motor per axis, ``get_xyz`` and ``set_xyz`` both use it
-for an axis the caller leaves out and say which motor they used, and every
-acquisition setting carries a ``default``. ``get_info`` answers the
-description, the set-up items and whether the microscope chooses its own
-folder; where a microscope saves is a set-up item.
-"""
-
 from __future__ import annotations
 
 import pytest
@@ -25,8 +15,6 @@ ACTUATORS = (
 
 
 class Scope(ZmartControllerPlugin):
-    """A driver in memory that remembers which motors each move was asked to use."""
-
     actuators = ACTUATORS
     settings = {"trigger": {"options": ["snap", "full"], "default": "snap", "active": "snap"}}
     info = (
@@ -72,9 +60,6 @@ class Scope(ZmartControllerPlugin):
 
 def scope(**answers):
     return type("Answering", (Scope,), answers)
-
-
-# ---- the default actuator
 
 
 def test_get_actuators_names_the_default_per_axis():
@@ -145,9 +130,6 @@ def test_an_unknown_motor_is_refused_before_the_driver_is_asked(chosen, says):
     assert session.plugin.asked == []
 
 
-# ---- get_info: the description and what is set up
-
-
 def test_get_info_answers_the_description_and_the_setup():
     content = ZmartController(Scope, {}).get_info()["output"]
 
@@ -157,9 +139,6 @@ def test_get_info_answers_the_description_and_the_setup():
         "chooses_its_own_folder": False,
         "connection_status": {},
     }
-
-
-# ---- the validator
 
 
 def test_a_scope_that_names_every_default_fits():

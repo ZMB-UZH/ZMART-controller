@@ -1,29 +1,3 @@
-"""The set dispatcher: change the microscope, then make sure it happened.
-
-Every set command runs through :meth:`SetDispatcher.run`, in the same steps
-for every microscope:
-
-1. **Limits gate.** A request outside the limits is refused with
-   ``ValueError`` before anything is sent.
-2. **Ready.** Wait, within a time limit, until the microscope is ready, for
-   example not in the middle of an acquisition.
-3. **Send** the command through its primitive.
-4. **Error check.** A temporary problem is sent again after a pause, a few
-   times. Anything else follows the error rules and is raised. A lost reply
-   is special: the command may already have happened, so the dispatcher
-   reads back instead of sending again blindly.
-5. **Confirm.** Read back through the get dispatcher, again and again within
-   a time window, until the target is reached.
-6. **Send again** if a window ends without confirmation, when that is safe.
-7. **Give up softly.** If the change is still not confirmed, the outcome
-   says so, and the caller decides what that means for the experiment.
-
-Commands are assumed to come from one caller at a time.
-
-Author: Thom de Hoog, Center for Microscopy and Image Analysis (ZMB),
-University of Zurich (thom.dehoog@zmb.uzh.ch, thomdehoog@gmail.com).
-"""
-
 from __future__ import annotations
 
 import time
@@ -35,32 +9,14 @@ from ..error_handling import RULES, Action, Kind
 from .gate import Gate
 from .tuning import DEFAULT_SET_TUNING, SetTuning
 
-# Marks a send whose reply was lost: the command may or may not have happened.
 REPLY_LOST = object()
 
 
-class NeverConfirmed(Exception):
-    """Raised by a confirmation that can already see the target will never be reached.
-
-    For example, the microscope is idle and no acquisition of ours is
-    running. The dispatcher then stops waiting at once instead of using up
-    the whole confirmation window.
-    """
+class NeverConfirmed(Exception): ...
 
 
 @dataclass
 class SetCommand:
-    """One set command, ready to run.
-
-    ``name`` is for messages. ``send`` calls the primitive and returns its
-    result. ``confirm(result)`` reads back and returns True once the target
-    is reached, or raises :class:`NeverConfirmed` when it can see it never
-    will be; ``result`` is ``None`` when the reply was lost. ``limits`` is
-    ``(key, values)`` for the gate; ``None`` is allowed only for commands
-    that cannot make anything less safe, such as stopping. ``ready``, when
-    given, returns True once the microscope can take the command.
-    """
-
     name: str
     send: Callable[[], Any]
     confirm: Callable[[Any], bool]
@@ -71,14 +27,6 @@ class SetCommand:
 
 @dataclass
 class Outcome:
-    """What happened to one set command.
-
-    ``confirmed`` says whether the readback showed the target. ``result`` is
-    what the send returned (such as a file name). ``sends`` and
-    ``confirm_windows`` count the work it took. ``reason`` explains an
-    unconfirmed outcome.
-    """
-
     confirmed: bool
     result: Any
     sends: int
@@ -87,8 +35,6 @@ class Outcome:
 
 
 class SetDispatcher:
-    """The engine behind every set command of one connected microscope."""
-
     def __init__(
         self,
         *,
@@ -105,7 +51,6 @@ class SetDispatcher:
         self._sleep = sleep
 
     def run(self, command: SetCommand) -> Outcome:
-        """Run ``command`` through every step. See the module description."""
         if command.limits is not None:
             refusal = self._gate.check(*command.limits)
             if refusal is not None:

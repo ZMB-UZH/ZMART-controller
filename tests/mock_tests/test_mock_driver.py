@@ -1,16 +1,3 @@
-"""Tests for the mock driver's parts, following the driver anatomy.
-
-The controller-level tests (tests/controller_tests/) check what an experiment sees.
-These check how the driver gets there: that every fault from the mock API is
-sorted into the right kind and handled by the rule for that kind, that the
-limits gate stops a request before anything is sent, that the configuration
-and the coordinate system behave, and that each part only uses the parts
-below it.
-
-Author: Thom de Hoog, Center for Microscopy and Image Analysis (ZMB),
-University of Zurich (thom.dehoog@zmb.uzh.ch, thomdehoog@gmail.com).
-"""
-
 from __future__ import annotations
 
 import ast
@@ -54,7 +41,6 @@ def slow_mic(mock, tmp_path):
 
 
 def _full_stack(session, z_planes, z_step_um=1.0):
-    """Set the mock's stored stack, and return the settings that trigger all of it."""
     answer = session.set_state({"changeable": {"z_planes": z_planes, "z_step_um": z_step_um}})
     assert answer["success"] is True, answer["output"]
     return {"trigger": "full"}
@@ -62,9 +48,6 @@ def _full_stack(session, z_planes, z_step_um=1.0):
 
 def _sent(session, command):
     return [entry for entry in session.plugin.handle.scope.history if entry["command"] == command]
-
-
-# --- part 2: error handling -----------------------------------------------------
 
 
 class TestErrorHandling:
@@ -88,11 +71,7 @@ class TestErrorHandling:
         assert classify(error) is kind
 
     def test_a_reading_fits_inside_a_confirmation_window(self):
-        # Otherwise the set dispatcher gives up before the reading arrives.
         assert DEFAULT_GET_TUNING.time_limit_s < DEFAULT_SET_TUNING.confirm_window_s
-
-
-# --- parts 3 and 4: the dispatchers, under every fault ----------------------------
 
 
 class TestFaultsThroughTheDriver:
@@ -136,7 +115,7 @@ class TestFaultsThroughTheDriver:
         assert re.search("could not be confirmed", failed["output"])
 
     def test_stale_reading_only_delays_confirmation(self, mic):
-        mic.get_xyz()  # gives the stale fault an old answer to repeat
+        mic.get_xyz()
         mic.plugin.handle.scope.faults.add("GetStagePosition", "stale")
         mic.set_xyz(25, 0, 0)
         assert mic.get_xyz()["output"]["x"]["position"] == 25
@@ -169,9 +148,6 @@ class TestFaultsThroughTheDriver:
         failed = mic.get_state()
         assert failed["success"] is False
         assert re.search("could not read", failed["output"])
-
-
-# --- part 4: the limits gate --------------------------------------------------------
 
 
 class TestLimitsGate:
@@ -207,7 +183,6 @@ class TestLimitsGate:
         assert "no limit" in Gate(limits).check("teleport", {})
 
     def test_limits_are_in_stage_coordinates(self, mock, tmp_path):
-        # A new origin shifts the user's numbers but never the safe range on the stage.
         save("origin", {"x": 54_000.0, "y": 37_500.0, "z": 5_000.0})
         session = _open(mock, tmp_path, mock_timing="instant")
         try:
@@ -216,9 +191,6 @@ class TestLimitsGate:
             assert failed["success"] is False
         finally:
             session.disconnect()
-
-
-# --- parts 3 and 4: actuators -----------------------------------------------------------
 
 
 class TestActuators:
@@ -232,9 +204,6 @@ class TestActuators:
         failed = mic.set_xyz(0, 0, 300, with_actuators={"z": "piezo"})
         assert failed["success"] is False
         assert re.search("beyond its reach", failed["output"])
-
-
-# --- part 5: procedures ------------------------------------------------------------------
 
 
 class TestProcedures:
@@ -265,19 +234,13 @@ class TestProcedures:
         session.disconnect()
         again = _open(mock, tmp_path, mock_timing="instant")
         try:
-            # A fresh pretend microscope starts at the slide's centre, which is
-            # now (-100, 50) from the recorded origin.
             position = again.get_xyz()["output"]
             assert (position["x"]["position"], position["y"]["position"]) == (-100.0, 50.0)
         finally:
             again.disconnect()
 
 
-# --- part 6: data handling --------------------------------------------------------------
-
-
 def _tiff_description(path: Path) -> str:
-    """The OME-XML in a TIFF written by the driver (a tiny reader for tests)."""
     raw = path.read_bytes()
     assert raw[:4] == b"II*\0"
     (ifd,) = struct.unpack_from("<I", raw, 4)
@@ -290,12 +253,6 @@ def _tiff_description(path: Path) -> str:
 
 
 def _centroid(pixels, width: int, *, around: tuple[float, float], reach: int = 4):
-    """Where a spot's light is centred, in pixel indices (row, column).
-
-    The brightest pixel within ``reach`` of ``around`` finds the spot; the
-    centre is then the light above the background, weighted over ``reach``
-    pixels round it, which a spot of the mock (about 1.2 pixels wide) fills.
-    """
     near = [
         (r, c)
         for r in range(round(around[0]) - reach, round(around[0]) + reach + 1)
@@ -428,8 +385,6 @@ class TestDataHandling:
         assert (root / "0" / "c" / "3" / "0" / "0").stat().st_size == 64 * 64 * 2
 
     def test_registration_lines_the_image_up_with_the_stage(self, mock, tmp_path):
-        # Save the camera orientation the mock really has, then check that a
-        # stage step to +x moves the saved picture's content to the left.
         session = _open(mock, tmp_path, mock_timing="instant")
         truth = session.plugin.handle.scope.truth()["orientation"]
         session.disconnect()
@@ -456,11 +411,6 @@ class TestDataHandling:
             session.disconnect()
 
     def test_a_spot_lies_in_the_store_where_it_lies_on_the_sample(self, mock, tmp_path):
-        # OME-Zarr places the centre of a voxel at index * scale + translation
-        # (RFC-5: the voxel centre is the origin), so a spot of the pretend
-        # sample must be found there, in the frame set_xyz takes, within a
-        # tenth of a pixel. The stage stands off the spot by a fraction of a
-        # pixel, so a store placed by its corner would miss by half a pixel.
         session = _open(mock, tmp_path, mock_timing="instant")
         truth = session.plugin.handle.scope.truth()
         session.disconnect()
@@ -499,13 +449,10 @@ class TestDataHandling:
         assert answer["success"] is False
         assert answer["output"].startswith("the acquisition could not be confirmed")
         assert list((tmp_path / "images").glob("acquisition_lost*")) == []
-        # An acquisition is never sent twice by itself.
         assert len(_sent(mic, "StartAcquisition")) == 1
 
 
 class TestProblemsFoundInReview:
-    """Problems found while reviewing the driver, kept as tests so they never come back."""
-
     def test_lost_acquisition_reply_still_saves_the_image(self, mic):
         mic.plugin.handle.scope.faults.add("StartAcquisition", "timeout")
         answer = mic.acquire(position_label="lost")
@@ -527,7 +474,7 @@ class TestProblemsFoundInReview:
         assert Path(answer["output"]["files"][0]).name.startswith(f"acquisition_{label}")
 
     def test_acquire_near_the_lower_limit(self, mic):
-        mic.set_xyz(-4980, -5000, 0)  # 20 µm from the x limit, right at the y limit
+        mic.set_xyz(-4980, -5000, 0)
         answer = mic.acquire(position_label="edge")
         assert answer["success"] is True
         assert mic.get_xyz()["output"]["x"]["position"] == -4980
@@ -557,9 +504,6 @@ class TestProblemsFoundInReview:
     ],
 )
 def test_alignment_undoes_every_camera_orientation(orientation):
-    # Draw the same slide twice, 5 µm apart in x and 3 µm apart in y, with a
-    # non-square camera, and check that after alignment the picture moved
-    # left by 5 pixels and up by 3, whatever way the camera sits.
     from mock_driver.data_handling import align_to_stage
     from mock_driver.testing.mock_api.sample import render
 
@@ -593,7 +537,6 @@ def test_alignment_undoes_every_camera_orientation(orientation):
 
 
 def _tiff_pixels(path: str) -> list[int]:
-    """The pixels of a TIFF written by the driver, as a flat list."""
     raw = Path(path).read_bytes()
     (ifd,) = struct.unpack_from("<I", raw, 4)
     (count,) = struct.unpack_from("<H", raw, ifd)
@@ -603,9 +546,6 @@ def _tiff_pixels(path: str) -> list[int]:
         fields[tag] = value & 0xFFFF if kind == 3 else value
     start, size = fields[273], fields[279]
     return list(struct.unpack_from(f"<{size // 2}H", raw, start))
-
-
-# --- part 7: configuration and the coordinate system ------------------------------------
 
 
 class TestConfiguration:
@@ -649,15 +589,12 @@ class TestConfiguration:
         assert "s3cret-value" not in str(caught.value)
 
 
-# --- real timing ------------------------------------------------------------------------
-
-
 class TestRealisticTiming:
     def test_moves_are_confirmed_after_they_settle(self, slow_mic):
         slow_mic.set_xyz(1000, 500, 0)
         assert slow_mic.get_xyz()["output"]["x"]["position"] == 1000
         reads = _sent(slow_mic, "GetStagePosition")
-        assert len(reads) > 1  # it had to read back more than once
+        assert len(reads) > 1
 
     def test_stop_during_an_acquisition(self, slow_mic):
         from mock_driver import set_actions
@@ -672,9 +609,6 @@ class TestRealisticTiming:
             read_mraw(status["last_acquisition"]["file"])
 
 
-# --- the layers ---------------------------------------------------------------------------
-
-# Which parts each part may import. A part may always import from itself.
 ALLOWED = {
     "vendor_interface": {"testing"},
     "error_handling": {"vendor_interface"},
@@ -697,11 +631,7 @@ ALLOWED = {
 
 
 def _imported_parts(path: Path, part: str) -> set[str]:
-    """The driver's parts that ``path`` imports from, wherever in its part it sits."""
     tree = ast.parse(path.read_text())
-    # Where this file sits, as package names below the driver: a relative
-    # import climbs from here, so it reaches another part only when it
-    # climbs to the driver's top.
     here = list(path.relative_to(PACKAGE).parent.parts)
     found = set()
     for node in ast.walk(tree):

@@ -1,16 +1,3 @@
-"""A driver is a folder, and its plugin is always in its ``zmart_controller_plugin/`` folder.
-
-The plugin is two files: ``zmart_controller_plugin.json``, which holds only
-the driver's ``name`` and its ``connection``, and ``zmart_controller_plugin.py``,
-which holds the ``ZmartControllerPlugin`` class. ``register_driver``,
-``load_driver`` and ``validate_driver`` take the driver's folder. The plugin
-folder needs no ``__init__.py``: it is imported as part of the driver, so it
-can use the driver's own code.
-
-Author: Thom de Hoog, Center for Microscopy and Image Analysis (ZMB),
-University of Zurich (thom.dehoog@zmb.uzh.ch, thomdehoog@gmail.com).
-"""
-
 from __future__ import annotations
 
 import json
@@ -30,7 +17,6 @@ from zmart_controller import (
 
 TEMPLATE_PLUGIN = Path(zmart_controller.__file__).parent / "template" / "zmart_controller_plugin"
 
-#: A plugin class that answers every command, written into a driver's plugin file.
 PLUGIN = """
 from {helpers} import DESCRIPTION
 
@@ -78,13 +64,6 @@ class ZmartControllerPlugin:
 
 
 def make_driver(folder: Path, name: str = "my-scope", package: bool = True, **json_extra) -> Path:
-    """Write a driver into ``folder``: its own code, and its plugin in ``zmart_controller_plugin/``.
-
-    A driver that is a package (``package=True``) has an ``__init__.py`` and
-    its plugin imports the driver's code relatively; a driver in a plain
-    folder imports it by its module name. The plugin folder never has an
-    ``__init__.py``.
-    """
     plugin = folder / "zmart_controller_plugin"
     plugin.mkdir(parents=True)
     if package:
@@ -149,7 +128,9 @@ class TestThePluginFiles:
             register_driver(folder)
 
     def test_a_password_the_driver_needs_is_null(self, tmp_path):
-        folder = make_driver(tmp_path / "driver", connection={"host": "localhost", "password": None})
+        folder = make_driver(
+            tmp_path / "driver", connection={"host": "localhost", "password": None}
+        )
         assert load_driver(folder).CONNECTION == {"host": "localhost", "password": None}
 
     def test_the_old_file_names_are_not_read(self, tmp_path):
@@ -203,7 +184,6 @@ class TestNoBuiltInMock:
 
 
 def test_the_mock_driver_is_a_driver_folder(mock):
-    """The mock in tests/ is registered like any driver and passes the same check."""
     folder = Path(__file__).parents[1] / "mock_driver"
     assert validate_driver(folder) == []
     assert get_instruments() == {"mock": {}}

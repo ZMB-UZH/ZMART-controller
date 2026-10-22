@@ -1,12 +1,3 @@
-"""What a microscope still needs set up, and what each acquisition setting starts at.
-
-``get_info`` answers four things: the microscope in words, its set-up
-items, each done or not with what to do about it, whether it chooses its
-own folder, and how the connection's checks went (``connection_status``). Where the microscope saves is one of the set-up items, in words:
-the workflow decides where its own runs go.
-Each acquisition setting says its ``default`` beside its ``active`` value.
-"""
-
 from __future__ import annotations
 
 import pytest
@@ -18,8 +9,6 @@ from zmart_controller.template.zmart_controller_plugin.zmart_controller_plugin i
 
 
 class Scope(ZmartControllerPlugin):
-    """A driver that lives in memory; ``info`` and ``settings`` are what it answers."""
-
     info = (
         "A scope in memory. +z points up.",
         {"limits": {"done": True, "says": "published"}},
@@ -79,7 +68,6 @@ def test_get_info_says_what_is_set_up():
 
 
 def test_the_connections_checks_keep_their_order():
-    """A client shows one row per check, in the driver's order."""
     checks = {"driver": "loaded", "stage": "pending", "saving": "failed: no disk D:"}
     driver = scope(info=("A scope in memory. +z points up.", {}, False, checks))
 
@@ -126,7 +114,6 @@ def test_a_wrong_answer_is_named(info, says):
 
 
 def test_the_state_says_the_image_size_and_pixel_size_of_its_settings():
-    """Before anything is captured, a workflow can plan: how many pixels, and how large each is."""
     observed = ZmartController(Scope, {}).get_state()["output"]["observed"]
 
     assert (observed["image_size_px"], observed["pixel_size_um"]) == ([512, 256], [0.5, 0.5])

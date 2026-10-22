@@ -1,21 +1,3 @@
-"""Writing OME-Zarr: a folder that holds a whole z-stack.
-
-OME-Zarr (also called OME-NGFF, the "next-generation file format") stores
-an image as a folder of small pieces with JSON descriptions. It is the
-format of choice for large and cloud-hosted data, and tools such as napari
-and neuroglancer open it directly. This writer produces version 0.5 of the
-format, the one the rest of ZMART reads and writes, stored as Zarr version 3:
-one uncompressed piece per z-plane, using only the Python standard library.
-
-The image has one level, the full resolution. Its description still says how
-smaller levels would be made, by averaging (``"type": "mean"``), because a
-viewer that builds its own zoomed-out copies reads that to know it may
-average the pixels too.
-
-Author: Thom de Hoog, Center for Microscopy and Image Analysis (ZMB),
-University of Zurich (thom.dehoog@zmb.uzh.ch, thomdehoog@gmail.com).
-"""
-
 from __future__ import annotations
 
 import json
@@ -37,14 +19,6 @@ def write_ome_zarr(
     position_um: dict[str, float],
     extra: dict[str, Any],
 ) -> None:
-    """Write ``planes`` as one OME-Zarr image with axes z, y and x.
-
-    ``position_um`` is the user position of the centre of the first voxel,
-    the lowest plane's first pixel. It becomes the image's translation: the
-    format places a voxel's centre at ``index * scale + translation``
-    (OME-NGFF RFC-5, "the pixel/voxel center is the origin of the continuous
-    coordinate system"), so viewers place the image where it was taken.
-    """
     path.mkdir(parents=True)
     axes = [{"name": axis, "type": "space", "unit": "micrometer"} for axis in ("z", "y", "x")]
     multiscale = {

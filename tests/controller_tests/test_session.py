@@ -1,13 +1,3 @@
-"""Tests for the cross-vendor controller against the mock driver.
-
-The answers hold only what the contract says. Details only the mock has,
-such as how it settled or which file format it wrote, are read from the
-mock's own code (``mock_driver.instrument``) with the connected handle.
-
-Author: Thom de Hoog, Center for Microscopy and Image Analysis (ZMB),
-University of Zurich (thom.dehoog@zmb.uzh.ch, thomdehoog@gmail.com).
-"""
-
 from __future__ import annotations
 
 import json
@@ -33,7 +23,6 @@ class TestSetInstrument:
         assert mic.context == {"driver": "mock"}
 
     def test_connection_reaches_driver(self, mock):
-        # the connection dict is handed untouched to the plugin when it connects
         session = ZmartController(mock, {"client": "my-client"})
         try:
             assert session.plugin.handle.client == "my-client"
@@ -43,7 +32,6 @@ class TestSetInstrument:
 
 class TestPosition:
     def test_set_get_roundtrip(self, mic):
-        """set_xyz answers exactly what get_xyz answers, read back after the move."""
         rec = mic.set_xyz(10, 20, 5)
         assert rec["success"] is True
         pos = rec["output"]
@@ -60,8 +48,6 @@ class TestPosition:
             assert pos[axis]["unit"] == "micrometer"
 
     def test_origin_is_driver_configuration(self, mock):
-        # The origin is saved by the driver's own setup step and loaded at
-        # connect, never set through the controller.
         save("origin", {"x": 50_100.0, "y": 37_500.0, "z": 5_000.0})
         session = ZmartController(mock)
         try:
@@ -69,7 +55,7 @@ class TestPosition:
             session.set_xyz(10, 0, 0)
             assert session.get_xyz()["output"]["x"]["position"] == 10
             stage = session.plugin.handle.scope.send("GetStagePosition")["result"]
-            assert stage["x"] == 50_110.0  # raw stage position = saved origin + user position
+            assert stage["x"] == 50_110.0
         finally:
             session.disconnect()
 
@@ -87,14 +73,12 @@ class TestPosition:
         )
 
     def test_every_motor_reports_its_raw_reading(self, mic):
-        """``actuator_readings`` lists each motor of the axis with the reading the stage itself reports."""
         pos = mic.get_xyz(with_actuators={"z": "piezo"})["output"]
         stage = mic.plugin.handle.scope.send("GetStagePosition")["result"]
         focus = mic.plugin.handle.scope.send("GetFocus")["result"]
         assert pos["x"]["actuator_readings"] == {"motoric": stage["x"]}
         assert pos["y"]["actuator_readings"] == {"motoric": stage["y"]}
         assert pos["z"]["actuator_readings"] == {"motoric": focus["focus"], "piezo": focus["piezo"]}
-        # Raw readings are the stage's own numbers, not the position from the origin.
         assert pos["x"]["actuator_readings"]["motoric"] != pos["x"]["position"]
 
     def test_unknown_actuator_is_refused(self, mic):
@@ -112,7 +96,7 @@ class TestAcquire:
         rec = rec["output"]
         assert list(rec) == ["position_label", "acquisition_type", "files", "planes"]
         assert rec["position_label"] == "A1"
-        assert rec["acquisition_type"] == "acquisition"  # the default kind
+        assert rec["acquisition_type"] == "acquisition"
         assert [Path(f).name for f in rec["files"]] == [
             "acquisition_A1.ome.tif",
             "acquisition_A1.commands.json",
@@ -127,9 +111,9 @@ class TestAcquire:
             output_folder=None,
             acquisition_settings=None,
         )
-        assert taken["settle"] == "backlash-corrected"  # the connection's default
-        assert taken["format"] == "ome-tiff"  # the connection's default
-        assert taken["trigger"] == "snap"  # the active trigger
+        assert taken["settle"] == "backlash-corrected"
+        assert taken["format"] == "ome-tiff"
+        assert taken["trigger"] == "snap"
         assert taken["confirmed"] is True
         assert taken["files"][-1] == taken["command_log"]
 
@@ -157,7 +141,7 @@ class TestAcquire:
 class TestState:
     def test_state_split_into_changeable_observed(self, mic):
         state = mic.get_state()["output"]
-        assert list(state) == ["changeable", "observed"]  # changeable first
+        assert list(state) == ["changeable", "observed"]
         assert "laser_power" in state["changeable"]
         assert "serial" in state["observed"]
 
@@ -174,7 +158,6 @@ class TestState:
         assert rec == {"success": True, "output": {"applied": {"laser_power": 7.0}}}
 
     def test_nothing_to_apply_is_a_failure_that_says_so(self, mic):
-        # An empty "changeable" changes nothing; the plugin says so instead of raising.
         rec = mic.set_state({"changeable": {}})
         assert rec == {
             "success": False,
@@ -182,16 +165,12 @@ class TestState:
         }
 
     def test_unknown_setting_name_is_refused(self, mic):
-        # A misspelled name is refused before anything is applied, so a typo
-        # never passes silently, not even beside a setting that is correct.
         before = mic.get_state()["output"]["changeable"]["gain"]
         failed = mic.set_state({"changeable": {"gain": before + 1, "gian": 1}})
         assert failed["success"] is False and "unknown settings ['gian']" in failed["output"]
         assert mic.get_state()["output"]["changeable"]["gain"] == before
 
     def test_observed_is_a_report_never_an_instruction(self, mic):
-        # A mismatching observed part does not block applying the changeable
-        # part, because set_state acts on the changeable part only.
         rec = mic.set_state({"changeable": {"laser_power": 5.0}, "observed": {"serial": "OTHER"}})
         assert rec["output"]["applied"]["laser_power"] == 5.0
 
@@ -217,16 +196,14 @@ class TestInfo:
         assert list(info["connection_status"]) == ["software", "stage"]
 
     def test_the_mock_starts_from_its_shipped_configuration(self, mic):
-        # Nothing has been set up yet, so every configuration item is a shipped default.
         sources = instrument.get_info(mic.plugin.handle)["configuration"]
         assert all(source.endswith("default.json") for source in sources.values())
 
 
 class TestDisconnect:
     def test_driver_refusal_reaches_the_caller_unchanged(self, mic):
-        # The controller refuses nothing itself; what the driver raises comes through.
         mic.disconnect()
-        mic.disconnect()  # the mock driver makes a second disconnect harmless
+        mic.disconnect()
         failed = mic.acquire(position_label="A1")
         assert failed == {"success": False, "output": "RuntimeError: session is disconnected"}
 
@@ -236,15 +213,10 @@ class TestDisconnect:
         assert failed["success"] is False and re.search("disconnected", failed["output"])
 
     def test_actuator_selection_does_not_persist(self, mic):
-        """A motor chosen for one call applies to that call only.
-
-        The next call is back to the default the driver names."""
         with_piezo = mic.set_xyz(0, 0, 30, with_actuators={"z": "piezo"})["output"]["z"]
         assert with_piezo["actuator_readings"]["piezo"] == 30.0
         by_default = mic.set_xyz(0, 0, 40)["output"]["z"]
-        assert (
-            by_default["actuator_readings"]["piezo"] == 30.0
-        )  # the piezo stayed; the coarse drive moved
+        assert by_default["actuator_readings"]["piezo"] == 30.0
         assert (
             by_default["actuator_readings"]["motoric"]
             == with_piezo["actuator_readings"]["motoric"] + 10.0
@@ -291,19 +263,13 @@ class TestModuleStyle:
 
 class TestCanvas:
     def test_the_canvas_is_the_travel_widened_by_half_the_widest_field(self, mock):
-        """At the edge of travel a picture still shows half a field further out.
-
-        The mock's widest field is the 10x objective's: 64 pixels of 1.0 µm,
-        so on x and y the canvas reaches 32 µm past the travel. Its z-stacks
-        must stay inside the travel, so on z the canvas is the travel itself.
-        """
         save("origin", {"x": 51_000.0, "y": 37_500.0, "z": 5_000.0})
         session = ZmartController(mock)
         try:
             output = session.get_xyz()["output"]
             assert output["x"]["canvas"] == [-6032.0, 4032.0]
             assert output["y"]["canvas"] == [-5032.0, 5032.0]
-            assert output["z"]["canvas"] == [-500.0, 500.0]  # exactly the z travel
+            assert output["z"]["canvas"] == [-500.0, 500.0]
         finally:
             session.disconnect()
 
@@ -313,19 +279,13 @@ class TestCanvas:
         assert failed["success"] is False and re.search(
             "outside the travel range", failed["output"]
         )
-        assert mic.get_xyz()["output"]["x"]["position"] == 10  # did not move
+        assert mic.get_xyz()["output"]["x"]["position"] == 10
 
 
-#: A plugin that hands every call to the mock's plugin.
 BENCH = "from {mock} import ZmartControllerPlugin  # noqa: F401\n"
 
 
 def bench_driver(tmp_path, name="bench", connection=None, package=False):
-    """A driver folder on disk whose plugin hands every call to the mock's plugin.
-
-    With ``package``, the folder is a package and the plugin uses a relative
-    import of the driver's own code, as our drivers do.
-    """
     folder = tmp_path / "drivers" / f"{name}_driver"
     plugin = folder / "zmart_controller_plugin"
     plugin.mkdir(parents=True)
@@ -356,7 +316,7 @@ class TestRegisteredDrivers:
         session = zmart_controller.ZmartController("bench")
         try:
             assert session.context == {"driver": "bench"}
-            assert session.plugin.handle.client == "bench-pc"  # its connection
+            assert session.plugin.handle.client == "bench-pc"
         finally:
             session.disconnect()
 

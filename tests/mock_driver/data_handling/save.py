@@ -1,23 +1,3 @@
-"""Saving one acquisition in the files ZMART uses, and reporting where it went.
-
-The layout in the folder saved to (the ``output_folder`` acquire was given,
-or else the connection's ``output_root``) is::
-
-    <folder>/<type>_<position_label>.ome.tif          one plane
-    <folder>/<type>_<position_label>_z000.ome.tif     a z-stack, one file per plane
-    <folder>/<type>_<position_label>.ome.zarr/        OME-Zarr, any number of planes
-    <folder>/<type>_<position_label>.commands.json    the command log
-
-``<type>`` is the acquisition type, such as ``overview``, so the kinds of
-acquisition in a run are told apart by name; the label then names the place.
-
-Nothing is ever overwritten: a second acquisition with the same label gets
-``_001``, ``_002`` and so on.
-
-Author: Thom de Hoog, Center for Microscopy and Image Analysis (ZMB),
-University of Zurich (thom.dehoog@zmb.uzh.ch, thomdehoog@gmail.com).
-"""
-
 from __future__ import annotations
 
 import json
@@ -30,20 +10,17 @@ from .ome_tiff import ome_xml, write_ome_tiff
 from .ome_zarr import write_ome_zarr
 from .orient import align_to_stage
 
-#: The file formats an acquisition can be saved in.
 FORMATS = ("ome-tiff", "ome-zarr")
 
 _UNSAFE = re.compile(r"[^A-Za-z0-9_.-]+")
 
 
 def safe_name(text: str) -> str:
-    """``text`` made safe as a file name: anything unusual becomes ``_``."""
     cleaned = _UNSAFE.sub("_", text).strip("._")
     return cleaned or "image"
 
 
 def _free(folder: Path, stem: str, suffixes: list[str]) -> str:
-    """A stem for which none of ``stem + suffix`` exists yet in ``folder``."""
     candidate = stem
     number = 0
     while any((folder / f"{candidate}{suffix}").exists() for suffix in suffixes):
@@ -63,16 +40,6 @@ def save_acquisition(
     position_um: dict[str, float],
     log_mark: int,
 ) -> dict[str, Any]:
-    """Turn the vendor's file into OME-TIFF or OME-Zarr in ``folder``, and save the command log.
-
-    ``position_um`` is the user position at which the image was taken.
-    ``log_mark`` is the command-log bookmark taken before the acquisition
-    started. Returns ``{"files": [...], "planes": [...], "command_log": ...}``
-    with the saved paths as text: ``files`` lists every file saved, the images
-    first and the command log last, and ``planes`` says for each image plane
-    which file holds it and where on the sample it was taken, as the contract
-    in docs/plug_in_a_driver/README.md asks.
-    """
     if image_format not in FORMATS:
         raise ValueError(f"unknown format {image_format!r}; choose one of {list(FORMATS)}")
     header, planes = wait_for_file(ctx, vendor_file)
@@ -82,11 +49,6 @@ def save_acquisition(
     planes, width, height = align_to_stage(
         planes, header["width"], header["height"], registration["orientation"]
     )
-    # The position is the centre of the picture. OME-Zarr places a store by
-    # the centre of its first voxel (RFC-5: the voxel centre is the origin of
-    # the coordinates), half a pixel in from the corner. The OME-TIFF plane
-    # keeps the corner as PositionX/Y: half a frame from the centre that the
-    # answer reports, and nothing in ZMART reads it.
     corner = {
         "x": position_um["x"] - (width / 2) * pixel_size,
         "y": position_um["y"] - (height / 2) * pixel_size,
@@ -147,8 +109,6 @@ def save_acquisition(
         held_in = list(files)
     log_path = folder / f"{stem}.commands.json"
     log_path.write_text(json.dumps(ctx.log.since(log_mark), indent=2))
-    # Every file saved is listed, the log too, so whoever moves or archives
-    # this acquisition leaves nothing behind.
     return {
         "files": [*files, str(log_path)],
         "planes": describe_planes(held_in, position_um, float(header["z_step_um"])),
@@ -159,14 +119,6 @@ def save_acquisition(
 def describe_planes(
     held_in: list[str], position_um: dict[str, float], z_step_um: float
 ) -> list[dict]:
-    """Say where on the sample each saved plane was taken, one entry per plane.
-
-    ``held_in`` names the file each plane is in, bottom plane first. The
-    pretend microscope has one channel and takes a stack upwards from where
-    the stage stands, so plane ``z`` sits ``z`` steps above the stage height,
-    at the stage's x and y. A saved file cannot tell this; the driver can,
-    because it knows where it sent the stage.
-    """
     return [
         {
             "path": path,
