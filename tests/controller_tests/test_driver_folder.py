@@ -58,7 +58,7 @@ class ZmartControllerPlugin:
         return self.get_xyz(with_actuators)
 
     def get_state(self):
-        return True, ({{}}, {{"frame": {{"size_px": [512, 512], "pixel_size_um": [1.0, 1.0]}}}})
+        return True, ({{}}, {{"image_size_px": [512, 512], "pixel_size_um": [1.0, 1.0]}})
 
     def set_state(self, changeable):
         return True, dict(changeable)

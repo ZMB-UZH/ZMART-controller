@@ -54,7 +54,7 @@ class KeywordOnly(ZmartControllerPlugin):
     def get_state(self):
         return True, (
             {"exposure_ms": 10.0},
-            {"frame": {"size_px": [512, 512], "pixel_size_um": [1.0, 1.0]}},
+            {"image_size_px": [512, 512], "pixel_size_um": [1.0, 1.0]},
         )
 
     def set_state(self, *, changeable):

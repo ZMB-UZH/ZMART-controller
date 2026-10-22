@@ -48,7 +48,7 @@ class Scope(ZmartControllerPlugin):
         return True, (0.0, 0.0, 0.0, readings, (-10.0, 10.0, -10.0, 10.0, -1.0, 1.0))
 
     def get_state(self):
-        return True, ({}, {"frame": {"size_px": [512, 512], "pixel_size_um": [1.0, 1.0]}})
+        return True, ({}, {"image_size_px": [512, 512], "pixel_size_um": [1.0, 1.0]})
 
     def get_acquisition_settings(self):
         return True, {"trigger": {"options": ["snap"], "default": "snap", "active": "snap"}}

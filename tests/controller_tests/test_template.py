@@ -63,7 +63,7 @@ class PretendDriver(ZmartControllerPlugin):
     def get_state(self):
         return True, (
             {"exposure_ms": self.exposure_ms},
-            {"objective": "10x", "frame": {"size_px": [512, 512], "pixel_size_um": [1.0, 1.0]}},
+            {"objective": "10x", "image_size_px": [512, 512], "pixel_size_um": [1.0, 1.0]},
         )
 
     def set_state(self, changeable):

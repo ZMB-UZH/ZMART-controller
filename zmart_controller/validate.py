@@ -255,9 +255,8 @@ def _check_state(output, problems):
     if not isinstance(output, dict) or not isinstance(output.get("observed"), dict):
         problems.append('get_state: the output must contain "observed", a dictionary')
         return
-    frame = output["observed"].get("frame")
-    sizes = frame.get("size_px") if isinstance(frame, dict) else None
-    pixels = frame.get("pixel_size_um") if isinstance(frame, dict) else None
+    sizes = output["observed"].get("image_size_px")
+    pixels = output["observed"].get("pixel_size_um")
     if not (
         isinstance(sizes, (list, tuple))
         and len(sizes) == 2
@@ -267,9 +266,9 @@ def _check_state(output, problems):
         and all(_is_number(size) and size > 0 for size in pixels)
     ):
         problems.append(
-            'get_state: "observed" must contain "frame": the picture a capture would take now, '
-            '{"size_px": [width, height], "pixel_size_um": [x, y]}, whole pixels and '
-            "micrometres above 0"
+            'get_state: "observed" must contain "image_size_px", [width, height] in whole '
+            'pixels, and "pixel_size_um", [x, y] in micrometres above 0: the image size and '
+            "pixel size of the current settings"
         )
 
 
