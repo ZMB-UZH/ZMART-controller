@@ -383,7 +383,7 @@ def test_an_acquisition_without_the_envelope_is_reported():
 # ---- the drivers installed on this computer
 
 
-def test_get_instruments_shows_each_connection_without_its_secrets(tmp_path):
+def test_get_instruments_shows_each_connection_as_written(tmp_path):
     plugin = tmp_path / "zmart_controller_plugin"
     plugin.mkdir()
     (plugin / "zmart_controller_plugin.py").write_text(
@@ -398,7 +398,7 @@ def test_get_instruments_shows_each_connection_without_its_secrets(tmp_path):
                     "microscope": "pretend-01",
                     "api_type": "socket",
                     "host": "127.0.0.1",
-                    "password": "hunter2",
+                    "password": None,
                     "config": "C:/pretend/config.ini",
                 },
             }
@@ -411,6 +411,7 @@ def test_get_instruments_shows_each_connection_without_its_secrets(tmp_path):
                 "microscope": "pretend-01",
                 "api_type": "socket",
                 "host": "127.0.0.1",
+                "password": None,
                 "config": "C:/pretend/config.ini",
             },
         }

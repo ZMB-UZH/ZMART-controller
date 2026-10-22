@@ -99,7 +99,7 @@ def test_the_template_loads_and_offers_every_function():
     driver = zmart_controller.load_driver(TEMPLATE.parent)
     assert driver.NAME.startswith("<the name you want")
     assert set(driver.CONNECTION) == {"microscope", "api_type", "host", "password", "config", "output_root"}
-    assert "put it here" not in driver.CONNECTION["password"]
+    assert driver.CONNECTION["password"] is None
     assert driver.ZmartControllerPlugin.__name__ == "ZmartControllerPlugin"
 
 
@@ -159,7 +159,7 @@ def test_a_copied_template_is_installed_from_the_drivers_folder(tmp_path):
         assert zmart_controller.register_driver(folder) == "my-scope-2"
         assert list(zmart_controller.get_instruments()) == ["my-scope-2"]
         shown = zmart_controller.get_instruments()["my-scope-2"]
-        assert shown["host"] == "127.0.0.1" and "password" not in shown
+        assert shown["host"] == "127.0.0.1" and shown["password"] is None
         with pytest.raises(NotImplementedError):  # it connects through the class
             zmart_controller.ZmartController("my-scope-2")
     finally:

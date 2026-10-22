@@ -40,6 +40,9 @@ PLUGIN_CLASS = "ZmartControllerPlugin"
 #: What the settings file may hold.
 SETTINGS_KEYS = ("name", "connection")
 
+#: A connection key holding one of these is secret: null in the file, typed when connecting.
+SECRET_WORDS = ("password", "token", "secret")
+
 
 def config_root() -> Path:
     """The folder where ZMART keeps its files on this computer: the list of drivers,
@@ -79,7 +82,7 @@ def save_installed_drivers(installed: dict[str, str]) -> None:
 
 
 def get_instruments() -> dict[str, dict[str, Any]]:
-    """Every installed driver by name, with how it connects. Passwords and tokens are left out.
+    """Every installed driver by name, with how it connects. A password is always null: it is typed when connecting.
 
     A driver that can no longer be loaded shows ``{"error": ...}`` instead,
     so one broken driver never hides the others.
@@ -91,11 +94,7 @@ def get_instruments() -> dict[str, dict[str, Any]]:
         except Exception as error:
             instruments[name] = {"error": f"{type(error).__name__}: {error}"}
             continue
-        instruments[name] = {
-            key: value
-            for key, value in connection.items()
-            if not any(word in key.lower() for word in ("password", "token", "secret"))
-        }
+        instruments[name] = connection
     return instruments
 
 
@@ -185,6 +184,10 @@ def load_driver(where: str | Path) -> SimpleNamespace:
     name = settings.get("name")
     if not isinstance(name, str) or not name.strip():
         raise ValueError(f'{settings_file} must give the driver\'s "name"')
+    connection = dict(settings.get("connection") or {})
+    for key, value in connection.items():
+        if value is not None and any(word in key.lower() for word in SECRET_WORDS):
+            raise ValueError(f"{settings_file}: {key!r} must be null; it is typed when connecting")
     plugin_file = folder / PLUGIN_FOLDER / PLUGIN_FILE
     if not plugin_file.is_file():
         raise ValueError(f"the driver's plugin is {PLUGIN_FILE}; {plugin_file} is missing")
@@ -194,7 +197,7 @@ def load_driver(where: str | Path) -> SimpleNamespace:
     return SimpleNamespace(
         __name__=name,
         NAME=name,
-        CONNECTION=dict(settings.get("connection") or {}),
+        CONNECTION=connection,
         ZmartControllerPlugin=found,
     )
 

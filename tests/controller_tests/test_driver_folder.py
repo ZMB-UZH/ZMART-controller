@@ -142,6 +142,16 @@ class TestThePluginFiles:
         with pytest.raises(ValueError, match="'driver'"):
             register_driver(folder)
 
+    @pytest.mark.parametrize("key", ["password", "api_token", "client_secret"])
+    def test_a_password_is_never_written_in_the_json(self, tmp_path, key):
+        folder = make_driver(tmp_path / "driver", connection={"host": "localhost", key: "hunter2"})
+        with pytest.raises(ValueError, match=f"{key!r} must be null"):
+            register_driver(folder)
+
+    def test_a_password_the_driver_needs_is_null(self, tmp_path):
+        folder = make_driver(tmp_path / "driver", connection={"host": "localhost", "password": None})
+        assert load_driver(folder).CONNECTION == {"host": "localhost", "password": None}
+
     def test_the_old_file_names_are_not_read(self, tmp_path):
         folder = make_driver(tmp_path / "driver")
         plugin = folder / "zmart_controller_plugin"

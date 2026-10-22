@@ -76,7 +76,7 @@ connection, nothing else:
     "microscope": "<a name for this particular instrument>",
     "api_type": "<how the vendor software is reached>",
     "host": "<if the vendor software listens on a network address, put it here>",
-    "password": "<null if the vendor software requires a password or token: it is typed when connecting, never written here>",
+    "password": null,
     "config": "<if the vendor software has a configuration file, put its path here>",
     "output_root": "<the folder the driver saves under; null when the workflow gives it when connecting>"
   }
@@ -85,8 +85,9 @@ connection, nothing else:
 
 These are the words every client shows when connecting, the same for every
 microscope. Leave out a key your microscope does not need, and a client shows
-it as not needed. A password is never written here: put `null`, and it is
-typed when connecting. `get_instruments` leaves passwords out.
+it as not needed. A password is never written here: keep `null` when the
+microscope needs one, and it is typed when connecting. A driver with a
+password, token or secret written in its file is refused.
 
 
 ## 3) Writing a driver
@@ -142,7 +143,7 @@ def __init__(self, connection):
 
 | Name | Type | What it is |
 |---|---|---|
-| `connection` | `dict` | A copy of the `connection` from `zmart_controller_plugin.json`, or the dictionary the workflow gave to `connect` instead. Not checked: the keys are yours to choose, and `{}` when there is none. |
+| `connection` | `dict` | A copy of the `connection` from `zmart_controller_plugin.json`, or the dictionary the workflow gave to `connect` instead. The template's keys where they fit, plus any of your own; `{}` when there is none. |
 
 **Return:** nothing. Raise an error when the microscope cannot be reached.
 
