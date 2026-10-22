@@ -36,7 +36,7 @@ adds up) is the driver's own: it goes in the driver's `observed` state or in lay
 its contents are each microscope's own: the namespaces, the keys of the capture record
 and the image frame, and the structure (`changeable` and `observed`,
 `actuator_readings` and `used_actuator`) are fixed; what is inside `changeable`,
-`observed` and `actuator_readings`, such as a Leica's `job` or its `z-galvo`, is the
+`observed` and `actuator_readings`, such as a setting or an actuator name, is the
 driver's. Layer 4 holds the vendor's words.
 
 A reader in ZMART depends on layers 1 to 3, and on the fixed parts of layer 3 only. It
@@ -155,7 +155,7 @@ What the vendor's software says about the image, whole: an `XMLAnnotation` whose
 element carries `xmlns=""` (or the vendor's own namespace), so its element names cannot be
 taken for OME's, with no XML declaration inside; or a `CommentAnnotation` when it is not
 XML. Its namespace is `https://github.com/ZMB-UZH/ZMART-controller/the_store/1/vendor/<name>`,
-for example `…/vendor/leica-lasx`. The same content, not the same bytes: an XML parser may
+named after the vendor's software. The same content, not the same bytes: an XML parser may
 write it differently. A readable key–value list of it, and anything else that is the
 driver's own (a route, its timing), may go beside it in the same namespace. Nothing in
 ZMART reads layer 4; it is there so nothing the vendor knew is lost.
