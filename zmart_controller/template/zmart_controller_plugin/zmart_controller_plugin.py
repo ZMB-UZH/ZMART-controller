@@ -23,8 +23,9 @@ class ZmartControllerPlugin:
         """Open the connection to the vendor software and keep what you need on ``self``.
 
         ``connection`` is the dictionary from ``zmart_controller_plugin.json``: which
-        microscope, how its software is reached, where it listens, its
-        password, and its configuration file.
+        microscope, how its software is reached, where it listens, the name
+        this program connects as, its password, its configuration, and the
+        folder it saves under.
         """
         raise NotImplementedError("ZmartControllerPlugin.__init__: open the connection")
 

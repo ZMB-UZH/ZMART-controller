@@ -34,14 +34,14 @@ def registry_file() -> Path:
 
 def installed_drivers() -> dict[str, str]:
     try:
-        return json.loads(registry_file().read_text())
+        return json.loads(registry_file().read_text(encoding="utf-8"))
     except FileNotFoundError:
         return {}
 
 
 def save_installed_drivers(installed: dict[str, str]) -> None:
     registry_file().parent.mkdir(parents=True, exist_ok=True)
-    registry_file().write_text(json.dumps(installed, indent=2) + "\n")
+    registry_file().write_text(json.dumps(installed, indent=2) + "\n", encoding="utf-8")
 
 
 def get_instruments() -> dict[str, dict[str, Any]]:
@@ -108,7 +108,7 @@ def load_driver(where: str | Path) -> SimpleNamespace:
         raise ValueError(
             f"the driver's settings are in {SETTINGS_FILE}; {settings_file} is missing"
         )
-    settings = json.loads(settings_file.read_text())
+    settings = json.loads(settings_file.read_text(encoding="utf-8"))
     extra = sorted(set(settings) - set(SETTINGS_KEYS))
     if extra:
         raise ValueError(f"{settings_file} holds only 'name' and 'connection', not {extra}")

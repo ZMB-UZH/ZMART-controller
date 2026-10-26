@@ -94,6 +94,7 @@ def test_the_template_loads_and_offers_every_function():
         "microscope",
         "api_type",
         "host",
+        "client",
         "password",
         "config",
         "output_root",

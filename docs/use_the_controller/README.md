@@ -75,6 +75,7 @@ mic.get_instruments()
   {'my-scope': {'microscope': 'my-scope-room-12',
                 'api_type': 'socket',
                 'host': '192.168.1.20',
+                'client': 'zmart',
                 'config': 'C:/vendor/settings.cfg'}}
   ```
 

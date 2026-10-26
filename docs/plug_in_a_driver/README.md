@@ -76,8 +76,9 @@ connection, nothing else:
     "microscope": "<a name for this particular instrument>",
     "api_type": "<how the vendor software is reached>",
     "host": "<if the vendor software listens on a network address, put it here>",
+    "client": "<if the vendor software tells its clients apart by name, the name this program connects as>",
     "password": null,
-    "config": "<if the vendor software has a configuration file, put its path here>",
+    "config": "<the configuration the microscope is used with: a file's path, or the name of a saved configuration>",
     "output_root": "<the folder the driver saves under; null when the workflow gives it when connecting>"
   }
 }
