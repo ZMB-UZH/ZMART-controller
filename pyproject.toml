@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "zmart-controller"
-version = "0.3.0"
+version = "0.4.0rc8"
 description = "One small, consistent way to drive any microscope from Python."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -25,23 +25,18 @@ classifiers = [
 Homepage = "https://github.com/ZMB-UZH/ZMART-controller"
 Repository = "https://github.com/ZMB-UZH/ZMART-controller"
 Issues = "https://github.com/ZMB-UZH/ZMART-controller/issues"
-"ZMART microscopy" = "https://github.com/thomdehoog/ZMART-microscopy"
+"ZMART microscopy" = "https://github.com/ZMB-UZH/ZMART-microscopy"
 
 [project.optional-dependencies]
-# pytest runs the tests. The rest run the two tutorial notebooks in docs/ from
-# start to end, so a renamed call or a changed answer breaks the build instead
-# of a reader's first session: nbmake and ipykernel execute the notebooks, and
-# numpy and pillow are what the "use the controller" tutorial imports.
-test = ["pytest", "nbmake", "ipykernel", "numpy", "pillow"]
+# pytest runs the tests.
+test = ["pytest"]
 
 [tool.setuptools.packages.find]
 include = ["zmart_controller*"]
 
 [tool.setuptools.package-data]
-# The mock driver's shipped configuration files.
-"zmart_controller.mock" = ["**/*.json"]
-# The driver template's settings file.
-"zmart_controller.template" = ["*.json", "*.py"]
+# The template's plugin folder: its settings file and its class.
+"zmart_controller.template" = ["zmart_controller_plugin/*.json", "zmart_controller_plugin/*.py"]
 
 
 [tool.pytest.ini_options]

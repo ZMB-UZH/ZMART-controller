@@ -13,9 +13,9 @@
 <td width="170"><img src="docs/zmart-controller-icon.png" width="150" alt="ZMART Controller"></td>
 <td valign="middle">
 
-The **ZMART Controller** provides a simple, universal schema for driving a microscope using Python. This simplifies testing and simulating workflows and allows you to reuse your workflows on different microscopes.
+The **ZMART Controller** provides a simple, universal vocabulary for driving a microscope using Python. This simplifies testing and simulating workflows and allows you to reuse your workflows on different microscopes. This repo is meant for coders, to help with generating interoperable smart microscopy workflows.
 
-It is part of [**ZMART**](https://github.com/thomdehoog/ZMART-microscopy) (ZMB's Microscopy-Agnostic Research Toolkit), the tools we are building for smart microscopy at the Center for Microscopy and Image Analysis (ZMB), University of Zurich.
+It is part of [**ZMART**](https://github.com/ZMB-UZH/ZMART-microscopy) (ZMB's Microscopy-Agnostic Research Toolkit), the tools we are building for smart microscopy at the Center for Microscopy and Image Analysis (ZMB), University of Zurich. There you can see how we use the controller.
 
 </td>
 </tr>
@@ -27,28 +27,31 @@ It is part of [**ZMART**](https://github.com/thomdehoog/ZMART-microscopy) (ZMB's
 
 When you want to implement an automated workflow on a microscope, you likely run into two problems:
 
-1. **Available time on the microscope is often scarce.** 
+1. **You want to share the workflow, but it only runs on your specific microscope.**
 
-2. **You want to share the workflow, but it only runs on your specific microscope.**
+2. **Available time on the microscope is often scarce.**
 
 <br>
 
 ## The Solution
 
-The ZMART controller sits between your workflow and the microscope and addresses these two problems:
+The ZMART Controller sits between your workflow and the microscope. Your workflow talks to the controller
+instead of to the microscope directly. This addresses the two problems:
 
-1. **A universal interface.** Your workflow talks to the controller instead of to the microscope directly.
-   Behind the controller you can plug in a simulated microscope, so you can build and test the whole
-   workflow at your desk, then only go to the microscope once it works and when you have time for it.
+1. **Use one vocabulary.** Your workflow is written in a universal vocabulary that is interpreted by a
+   ZMART driver, so every microscope that has a ZMART driver can run your workflow. Positions are part of
+   that vocabulary: they are absolute, in micrometres from the origin, and every driver must provide them
+   for its microscope.
 
-2. **A common vocabulary.** Your workflow is written in a universal language that is interpreted by a
-   ZMART driver, so every microscope that has a ZMART driver can run your workflow.
+2. **Test without the microscope.** Because the vocabulary is the same, you can plug in a simulated microscope
+   behind the controller, so you can build and test the whole workflow at your desk. You only go to the
+   microscope once it works and when you have time for it.
 
 <p align="center">
   <img src="docs/zmart-controller-overview-2.png" width="100%" alt="Three microscopes, each with its own driver plugged in, connect through the ZMART Controller, one universal command vocabulary, to a script, an interface and an AI agent">
 </p>
 
-### A common vocabulary
+### The vocabulary
 
 Everything you can say to a microscope:
 
@@ -74,7 +77,7 @@ mic.set_state(Dict)
 
 # 5) Capture and save an image with the appropriate acquisition settings
 mic.get_acquisition_settings()
-mic.acquire(position_label=String, acquisition_settings=Dict)
+mic.acquire(position_label=String, acquisition_type=String, output_folder=String, acquisition_settings=Dict)
 
 # 6) Run a routine the microscope offers (for example autofocus)
 mic.get_procedures()
@@ -113,9 +116,8 @@ our needs, and the Model Hardware Standard is not released to the public yet.
 
 ## Status
 
-This is version 0.3, a beta. Today it is the layer between our workflows and the Leica Stellaris: the workflow
-speaks the controller's commands, and the Stellaris driver turns them into actions on the microscope.
-However, the mock driver, `zmart_controller.mock`, lets you try everything without a microscope.
+This is version 0.4, a beta. Today we use it between our workflows and one microscope: the workflow
+speaks the controller's commands, and that microscope's driver turns them into actions on the microscope.
 
 ## Author
 Thom de Hoog, Center for Microscopy and Image Analysis (ZMB), University of Zurich.

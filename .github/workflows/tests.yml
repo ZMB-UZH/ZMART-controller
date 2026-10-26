@@ -1,12 +1,13 @@
 # The checks that run on every push and pull request, on Linux and Windows.
 #
-# Everything runs on the mock driver, zmart_controller.mock, so no microscope
-# is needed. There are two jobs:
+# The tests run on the mock driver in tests/mock_driver/, so no microscope is
+# needed. The mock is only for the tests: it is not part of the package.
+# There are two jobs:
 #
-#   tests    the controller's and the mock driver's tests, the two tutorial
-#            notebooks in docs/ run from start to end, and a style check
+#   tests    the controller's and the mock driver's tests, and a style check
 #   package  the package is built, checked, installed into an empty
-#            environment and used once, the way a new user would
+#            environment and used once, the way a new user would: it holds
+#            the template's plugin and no mock
 #
 # The built package is kept with the run for 14 days, so a release can be
 # taken from a green run instead of from someone's laptop.
@@ -36,13 +37,6 @@ jobs:
         run: python -m pip install -e ".[test]" ruff
       - name: The tests
         run: python -m pytest
-      - name: The tutorial notebooks, run from start to end
-        # The "plug in a driver" tutorial registers a driver on the computer it
-        # runs on. Point that at a scratch folder so the runner's own list of
-        # drivers is never touched.
-        env:
-          ZMART_MICROSCOPY_ROOT: ${{ runner.temp }}/zmart-microscopy
-        run: python -m pytest --nbmake -p no:cacheprovider docs/
       - name: Style
         run: |
           python -m ruff check .
@@ -61,22 +55,37 @@ jobs:
           python -m pip install build twine
           python -m build
           python -m twine check dist/*
+      - name: The wheel holds the template's plugin and no mock
+        run: |
+          python -c "
+          import glob, zipfile
+          names = zipfile.ZipFile(glob.glob('dist/*.whl')[0]).namelist()
+          assert not [name for name in names if '/mock' in name], 'the wheel holds the mock'
+          plugin = 'zmart_controller/template/zmart_controller_plugin/'
+          for file in ('zmart_controller_plugin.json', 'zmart_controller_plugin.py'):
+              assert plugin + file in names, plugin + file + ' is missing from the wheel'
+          print('the wheel holds the template and no mock')
+          "
       - name: Install the wheel into an empty environment and use it once
         # A fresh environment, not the checkout: this catches a file that is
-        # in the repository but missing from the wheel, such as a driver's
-        # settings file, which an editable install would never notice.
+        # in the repository but missing from the wheel, such as the template's
+        # settings file, which an editable install would never notice. The
+        # template is registered like any driver, into a scratch folder.
+        env:
+          ZMART_MICROSCOPY_ROOT: ${{ runner.temp }}/zmart-microscopy
         run: |
           python -m venv "$RUNNER_TEMP/fresh"
           "$RUNNER_TEMP/fresh/bin/python" -m pip install dist/*.whl
           cd "$RUNNER_TEMP"
           "$RUNNER_TEMP/fresh/bin/python" -c "
-          import zmart_controller.mock
-          from zmart_controller import mic
-          mic.connect(zmart_controller.mock, {'output_root': 'mock-images'})
-          assert mic.get_info()['success']
-          assert mic.get_xyz()['success']
-          assert mic.acquire(position_label='A1')['success']
-          mic.disconnect()
+          import importlib.util
+          from pathlib import Path
+          import zmart_controller
+          assert importlib.util.find_spec('zmart_controller.mock') is None
+          template = Path(zmart_controller.__file__).parent / 'template'
+          name = zmart_controller.register_driver(template)
+          assert list(zmart_controller.get_instruments()) == [name]
+          assert zmart_controller.load_driver(template).ZmartControllerPlugin.__name__ == 'ZmartControllerPlugin'
           print('the installed package works')
           "
       - uses: actions/upload-artifact@v7

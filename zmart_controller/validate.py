@@ -1,45 +1,24 @@
-"""Does a driver fit the controller? One call says which methods still answer wrongly.
-
-Run it before installing a driver, with the same argument as ``register_driver``::
-
-    zmart_controller.validate_driver("C:/drivers/my-scope/zmart_driver.json")
-
-:func:`validate_driver` connects and checks every ``get_*`` answer.
-:func:`check_acquire_answer` checks one acquisition, which the driver's own
-tests take, since checking it means taking a picture.
-
-Author: Thom de Hoog, Center for Microscopy and Image Analysis (ZMB),
-University of Zurich (thom.dehoog@zmb.uzh.ch, thomdehoog@gmail.com).
-"""
-
 from __future__ import annotations
 
+import inspect
 import math
 from pathlib import Path
 from typing import Any
 
-from .zmart_controller import UNIT, ZmartController
+from .zmart_controller import ZmartController
 
-#: The three axes every driver reports.
 AXES = ("x", "y", "z")
 
 
 def validate_driver(driver: Any, connection: dict[str, Any] | None = None) -> list[str]:
-    """Connect to ``driver`` and check every ``get_*`` answer against the contract.
-
-    ``driver`` is the driver's ``zmart_driver.json`` or its folder, as for
-    ``register_driver``, or anything ``ZmartController`` accepts, such as a
-    ``ZmartDriver`` class with its ``connection``. It moves nothing and
-    acquires nothing.
-
-    Returns the problems found, one sentence each. Empty means the driver fits.
-    Raises whatever the driver raises on connect.
-    """
-    from .registry import load_driver
+    from .registry import find_driver, load_driver
 
     if isinstance(driver, (str, Path)) and Path(driver).exists():
         driver = load_driver(driver)
-    problems: list[str] = []
+    elif isinstance(driver, str):
+        driver, saved = find_driver(driver)
+        connection = saved if connection is None else connection
+    problems: list[str] = parameter_problems(driver)
     session = ZmartController(driver, connection)
     try:
         checks = {
@@ -56,36 +35,72 @@ def validate_driver(driver: Any, connection: dict[str, Any] | None = None) -> li
             except Exception as exc:
                 problems.append(f"{name} raised {type(exc).__name__}: {exc}")
                 continue
-            content = _envelope(name, answer, problems)
-            if content is not None:
-                check(content, problems)
+            output = _envelope(name, answer, problems)
+            if output is not None:
+                check(output, problems)
     finally:
         session.disconnect()
     return problems
 
 
+PARAMETERS = {
+    "get_xyz": ("with_actuators",),
+    "set_xyz": ("x", "y", "z", "with_actuators"),
+    "set_state": ("changeable",),
+    "acquire": ("position_label", "acquisition_type", "output_folder", "acquisition_settings"),
+    "run_procedure": ("procedure",),
+}
+
+
+def parameter_problems(driver: Any) -> list[str]:
+    from .registry import plugin_class
+
+    try:
+        plugin = plugin_class(driver)
+    except ValueError:
+        return []
+    problems = []
+    for command, names in PARAMETERS.items():
+        method = getattr(plugin, command, None)
+        if not callable(method):
+            continue
+        parameters = inspect.signature(method).parameters
+        if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in parameters.values()):
+            continue
+        missing = [name for name in names if name not in parameters]
+        if missing:
+            problems.append(
+                f"{command} must take {', '.join(names)}, by these names; "
+                f"it does not take {', '.join(missing)}"
+            )
+    return problems
+
+
 def _envelope(name: str, answer: Any, problems: list[str]):
-    """Check the ``{"success", "content"}`` shape; return the content, or None."""
-    if not isinstance(answer, dict) or not {"success", "content"} <= set(answer):
+    if not isinstance(answer, dict) or not {"success", "output"} <= set(answer):
         problems.append(
-            f'{name} must return {{"success": ..., "content": ...}}, got {type(answer).__name__}'
+            f'{name} must return {{"success": ..., "output": ...}}, got {type(answer).__name__}'
         )
         return None
     if not isinstance(answer["success"], bool):
         problems.append(f"{name}: success must be True or False")
-    return answer["content"]
+    return answer["output"]
 
 
-def _check_info(content, problems):
-    # Whoever drives the microscope reads the description, so it has to say something.
-    description = content.get("description") if isinstance(content, dict) else None
+def _check_info(output, problems):
+    description = output.get("description") if isinstance(output, dict) else None
     if not (isinstance(description, str) and description.strip()):
         problems.append(
-            "get_info: the content must contain description, text that describes the microscope"
+            "get_info: the output must contain description, text that describes the microscope"
         )
-    if not isinstance(content, dict):
+    if not isinstance(output, dict):
         return
-    setup = content.get("setup", {})
+    if not isinstance(output.get("chooses_its_own_folder"), bool):
+        problems.append(
+            "get_info: chooses_its_own_folder must be True or False: whether acquire saves "
+            "anywhere but in the output_folder it is given"
+        )
+    setup = output.get("setup", {})
     if not isinstance(setup, dict):
         problems.append('get_info: setup must map each set-up item to {"done": ..., "says": ...}')
         return
@@ -96,15 +111,27 @@ def _check_info(content, problems):
             problems.append(
                 f"get_info: setup {item!r} must say in words what it holds or what to do"
             )
+    status = output.get("connection_status", {})
+    if not isinstance(status, dict):
+        problems.append(
+            "get_info: connection_status must map each of the connection's checks to its "
+            'answer, "pending", or a text that begins with "failed"'
+        )
+        return
+    for check, answer in status.items():
+        if not (isinstance(answer, str) and answer.strip()):
+            problems.append(
+                f"get_info: connection_status {check!r} must say in words how the check went, "
+                '"pending" until it has an answer'
+            )
 
 
-def _check_actuators(content, problems):
-    """Check that every axis lists its motors and names the one used when none is chosen."""
-    if not isinstance(content, dict):
-        problems.append("get_actuators: the content must map each axis to its motors and default")
+def _check_actuators(output, problems):
+    if not isinstance(output, dict):
+        problems.append("get_actuators: the output must map each axis to its motors and default")
         return
     for axis in AXES:
-        motors = content.get(axis)
+        motors = output.get(axis)
         if not isinstance(motors, dict) or not isinstance(motors.get("options"), list):
             problems.append(
                 f"get_actuators: axis {axis!r} must be "
@@ -125,50 +152,26 @@ def _check_actuators(content, problems):
             )
 
 
-def _check_xyz(content, problems):
-    """Check a ``get_xyz`` answer; ``set_xyz`` answers the same, so it fits the same check.
-
-    Each axis must carry ``position``, a number, micrometres from the
-    origin; ``unit``, which must be ``"micrometer"``; ``actuator``, the
-    motor this answer used, one of those it reads; ``actuators``, every
-    motor of the axis with its own raw reading, as a number; and ``canvas``,
-    everywhere a picture can show, as [min, max].
-    """
-    if not isinstance(content, dict):
-        problems.append("get_xyz: the content must map each axis to its reading")
+def _check_xyz(output, problems):
+    if not isinstance(output, dict):
+        problems.append("get_xyz: the output must map each axis to its reading")
         return
     for axis in AXES:
-        reading = content.get(axis)
-        if not isinstance(reading, dict):
-            problems.append(f"get_xyz: axis {axis!r} is missing")
-            continue
-        for key in ("position", "unit", "actuator", "actuators", "canvas"):
-            if key not in reading:
-                problems.append(f"get_xyz: axis {axis!r} is missing {key!r}")
-        if "position" in reading and not _is_number(reading["position"]):
+        reading = output[axis]
+        if not _is_number(reading["position"]):
             problems.append(f"get_xyz: axis {axis!r} position must be a number, in micrometres")
-        if "unit" in reading and reading["unit"] != UNIT:
-            problems.append(f"get_xyz: axis {axis!r} unit must be {UNIT!r}")
-        if "actuators" in reading:
-            found = len(problems)
-            _check_readings(axis, reading["actuators"], problems)
-            readings = reading["actuators"]
-            if (
-                len(problems) == found
-                and "actuator" in reading
-                and reading["actuator"] not in readings
-            ):
-                problems.append(
-                    f"get_xyz: axis {axis!r} actuator {reading['actuator']!r} must be one of "
-                    f"the motors it reads, {list(readings)}"
-                )
-        canvas = reading.get("canvas")
-        if canvas is not None:
-            _check_canvas(axis, canvas, problems)
+        found = len(problems)
+        _check_readings(axis, reading["actuator_readings"], problems)
+        used = reading["used_actuator"]
+        if len(problems) == found and used not in reading["actuator_readings"]:
+            problems.append(
+                f"get_xyz: axis {axis!r} used_actuator {used!r} must be one of its "
+                f"actuator_readings, {list(reading['actuator_readings'])}"
+            )
+        _check_canvas(axis, reading["canvas"], problems)
 
 
 def _check_readings(axis, readings, problems):
-    """Check one axis's ``actuators``: each motor by name, with its raw reading as a number."""
     if not (
         isinstance(readings, dict)
         and readings
@@ -176,18 +179,16 @@ def _check_readings(axis, readings, problems):
         and all(_is_number(value) for value in readings.values())
     ):
         problems.append(
-            f"get_xyz: axis {axis!r} actuators must name every motor of the axis "
-            f"with its raw reading as a number, in micrometres"
+            f"get_xyz: axis {axis!r} actuator_readings must name every motor of the axis "
+            f"with its reading as a number, in micrometres"
         )
 
 
 def _is_number(value) -> bool:
-    """True for an int or a float; True and False are not numbers here."""
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
 def _check_canvas(axis, canvas, problems):
-    """Check one axis's ``canvas``: everywhere a picture can show along it, [min, max]."""
     if not (
         isinstance(canvas, (list, tuple))
         and len(canvas) == 2
@@ -200,27 +201,34 @@ def _check_canvas(axis, canvas, problems):
         )
 
 
-def _check_state(content, problems):
-    if not isinstance(content, dict) or not isinstance(content.get("changeable"), dict):
-        problems.append(
-            'get_state: the content must contain "changeable", a dictionary of settings'
-        )
-    if not isinstance(content, dict) or not isinstance(content.get("observed"), dict):
-        problems.append('get_state: the content must contain "observed", a dictionary')
-
-
-def _check_acquisition_settings(content, problems):
-    """Check that every setting has its options, the driver's default and the active value.
-
-    Options may be a list or a rule in words; when they are a list, the
-    default and the active value must both be on it.
-    """
-    if not isinstance(content, dict):
-        problems.append(
-            "get_acquisition_settings: the content must map each setting to its choices"
-        )
+def _check_state(output, problems):
+    if not isinstance(output, dict) or not isinstance(output.get("changeable"), dict):
+        problems.append('get_state: the output must contain "changeable", a dictionary of settings')
+    if not isinstance(output, dict) or not isinstance(output.get("observed"), dict):
+        problems.append('get_state: the output must contain "observed", a dictionary')
         return
-    for name, spec in content.items():
+    sizes = output["observed"].get("image_size_px")
+    pixels = output["observed"].get("pixel_size_um")
+    if not (
+        isinstance(sizes, (list, tuple))
+        and len(sizes) == 2
+        and all(isinstance(n, int) and not isinstance(n, bool) and n > 0 for n in sizes)
+        and isinstance(pixels, (list, tuple))
+        and len(pixels) == 2
+        and all(_is_number(size) and size > 0 for size in pixels)
+    ):
+        problems.append(
+            'get_state: "observed" must contain "image_size_px", [width, height] in whole '
+            'pixels, and "pixel_size_um", [x, y] in micrometres above 0: the image size and '
+            "pixel size of the current settings"
+        )
+
+
+def _check_acquisition_settings(output, problems):
+    if not isinstance(output, dict):
+        problems.append("get_acquisition_settings: the output must map each setting to its choices")
+        return
+    for name, spec in output.items():
         if not isinstance(spec, dict) or not {"options", "default", "active"} <= set(spec):
             problems.append(
                 f'get_acquisition_settings: {name!r} must have "options", "default" and "active"'
@@ -236,66 +244,41 @@ def _check_acquisition_settings(content, problems):
                 )
 
 
-def _check_procedures(content, problems):
-    if not isinstance(content, dict):
+def _check_procedures(output, problems):
+    if not isinstance(output, dict):
         problems.append(
-            "get_procedures: the content must map each procedure name to its description"
+            "get_procedures: the output must map each procedure name to its description"
         )
         return
-    for name, spec in content.items():
+    for name, spec in output.items():
         if not isinstance(spec, dict) or "description" not in spec:
             problems.append(f'get_procedures: {name!r} must have a "description"')
 
 
-# ---- checking one acquisition against the contract
-
-
-def check_acquire_answer(answer: Any) -> list[str]:
-    """Check what a driver's ``acquire`` answered against the contract.
-
-    ``answer`` is the whole answer, ``{"success": ..., "content": ...}``. The
-    content must name the ``position_label`` it was given, and list under
-    ``files`` the path of every file the acquisition saved: the images and
-    anything saved beside them. A format kept as a
-    folder, such as OME-Zarr, is listed by its folder. Every path must exist.
-    This is how a workflow finds the pictures on any microscope, so a driver
-    that keeps them under a name of its own works with none of them.
-
-    ``planes`` then says, for every saved image plane, which file it is in,
-    which channel, depth and moment it is (``c``, ``z`` and ``t``, each
-    counted from 0, which also find the plane inside a file that holds many),
-    and where on the sample it was taken (``x_um``, ``y_um`` and ``z_um``, in
-    micrometres, in the frame ``set_xyz`` takes). Every file a plane names must
-    be in ``files``, and no two planes may share the same channel, depth and
-    moment. A driver may add entries of its own to a plane; they are not
-    checked.
-
-    A z-stack is described the same way on every microscope, however it was
-    made: ``z_um`` is each slice's own height, depth 0 is the lowest slice,
-    each depth above it is higher, and the channels of one slice share its
-    height.
-
-    An acquisition that did not succeed may list no files and no planes.
-    Returns the problems found, one sentence each; empty means the answer fits.
-
-    :func:`validate_driver` cannot take a picture, because it must never move
-    or expose anything. A driver's own tests call this after an acquisition
-    instead, on a simulator or a test bench.
-    """
+def check_acquire_answer(
+    answer: Any,
+    output_folder: str | Path | None = None,
+    chooses_its_own_folder: bool = False,
+) -> list[str]:
     problems: list[str] = []
-    content = _envelope("acquire", answer, problems)
-    if content is None:
+    output = _envelope("acquire", answer, problems)
+    if output is None:
         return problems
-    if not isinstance(content, dict):
-        return problems + ["acquire: the content must be a dict"]
-    if "position_label" not in content:
-        problems.append("acquire: the content must contain position_label")
-    if "files" not in content:
+    if not isinstance(output, dict):
+        return problems + ["acquire: the output must be a dict"]
+    if "position_label" not in output:
+        problems.append("acquire: the output must contain position_label")
+    kind = output.get("acquisition_type")
+    if not (isinstance(kind, str) and kind.strip()):
         problems.append(
-            "acquire: the content must contain files, the list of paths of every file it saved"
+            "acquire: the output must contain acquisition_type, the kind of acquisition it was"
+        )
+    if "files" not in output:
+        problems.append(
+            "acquire: the output must contain files, the list of paths of every file it saved"
         )
         return problems
-    files = content["files"]
+    files = output["files"]
     if not isinstance(files, list) or not all(isinstance(path, str) for path in files):
         problems.append("acquire: files must be a list of paths, one per saved file")
         return problems
@@ -304,30 +287,28 @@ def check_acquire_answer(answer: Any) -> list[str]:
     for path in files:
         if not Path(path).exists():
             problems.append(f"acquire: files names {path}, which does not exist")
-    return problems + _plane_problems(answer.get("success") is True, content, files)
+        elif output_folder is not None and not chooses_its_own_folder:
+            if not Path(path).resolve().is_relative_to(Path(output_folder).resolve()):
+                problems.append(
+                    f"acquire: files names {path}, which is not in the output_folder "
+                    f"{output_folder} it was given; a driver whose software saves in its own "
+                    "place says so in get_info (chooses_its_own_folder)"
+                )
+    return problems + _plane_problems(answer.get("success") is True, output, files)
 
 
-#: What every entry of the ``planes`` in acquire's content holds: the file, the
-#: plane's channel, depth and moment counted from 0, and the stage position in
-#: micrometres it was taken at. docs/plug_in_a_driver/README.md explains each one.
 _PLANE_COUNTS = ("c", "z", "t")
 _PLANE_POSITION_UM = ("x_um", "y_um", "z_um")
 _PLANE_KEYS = ("path", *_PLANE_COUNTS, *_PLANE_POSITION_UM)
 
 
-def _plane_problems(succeeded: bool, content: dict, files: list[str]) -> list[str]:
-    """The problems with the ``planes`` in acquire's content, one sentence each.
-
-    The planes are how a workflow knows where each saved picture sits on the
-    sample, so each entry is checked on its own and the sentence names it by
-    its place in the list (``planes[0]`` is the first).
-    """
-    if "planes" not in content:
+def _plane_problems(succeeded: bool, output: dict, files: list[str]) -> list[str]:
+    if "planes" not in output:
         return [
-            "acquire: the content must contain planes, one entry per saved image saying which "
+            "acquire: the output must contain planes, one entry per saved image saying which "
             "file, channel, depth and stage position it is"
         ]
-    planes = content["planes"]
+    planes = output["planes"]
     if not isinstance(planes, list) or not all(isinstance(plane, dict) for plane in planes):
         return ["acquire: planes must be a list with one dictionary per saved image plane"]
     problems: list[str] = []
@@ -370,13 +351,6 @@ def _plane_problems(succeeded: bool, content: dict, files: list[str]) -> list[st
 
 
 def _stack_problems(heights: dict[tuple[int, int, int], float]) -> list[str]:
-    """The problems with where the slices of a stack are, from ``(c, z, t) -> z_um``.
-
-    Whichever way the microscope moved through the stack, depth 0 is the
-    lowest slice and each depth above it is higher, so a workflow reads a
-    stack the same way on every microscope. The channels of one slice were
-    taken at the same height, so they share it.
-    """
     problems = []
     for (c, z, t), height in sorted(heights.items()):
         first = min(one for one in heights if one[1:] == (z, t))

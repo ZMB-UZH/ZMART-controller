@@ -1,18 +1,11 @@
-"""The defaults a driver names, and acquisition settings that say how to trigger.
-
-The driver decides every default and the answers say it: ``get_actuators``
-names the default motor per axis, ``get_xyz`` and ``set_xyz`` both use it
-for an axis the caller leaves out and say which motor they used, and every
-acquisition setting carries a ``default``. ``get_info`` answers the
-description and the set-up items; where a microscope saves is a set-up item.
-"""
-
 from __future__ import annotations
 
 import pytest
 
 from zmart_controller import ZmartController, validate_driver
-from zmart_controller.template.zmart_driver import ZmartDriver
+from zmart_controller.template.zmart_controller_plugin.zmart_controller_plugin import (
+    ZmartControllerPlugin,
+)
 
 ACTUATORS = (
     {"options": ["motoric"], "default": "motoric"},
@@ -21,14 +14,14 @@ ACTUATORS = (
 )
 
 
-class Scope(ZmartDriver):
-    """A driver in memory that remembers which motors each move was asked to use."""
-
+class Scope(ZmartControllerPlugin):
     actuators = ACTUATORS
     settings = {"trigger": {"options": ["snap", "full"], "default": "snap", "active": "snap"}}
     info = (
         "A scope in memory. +z points up.",
         {"saving": {"done": True, "says": "OME-TIFF under D:/data"}},
+        False,
+        {},
     )
 
     def __init__(self, connection):
@@ -56,7 +49,7 @@ class Scope(ZmartDriver):
         return self.get_xyz(with_actuators)
 
     def get_state(self):
-        return True, ({}, {})
+        return True, ({}, {"image_size_px": [512, 512], "pixel_size_um": [1.0, 1.0]})
 
     def get_acquisition_settings(self):
         return True, self.settings
@@ -69,11 +62,8 @@ def scope(**answers):
     return type("Answering", (Scope,), answers)
 
 
-# ---- the default actuator
-
-
 def test_get_actuators_names_the_default_per_axis():
-    content = ZmartController(Scope, {}).get_actuators()["content"]
+    content = ZmartController(Scope, {}).get_actuators()["output"]
 
     assert content == {
         "x": {"options": ["motoric"], "default": "motoric"},
@@ -92,10 +82,10 @@ def test_the_driver_decides_the_default_not_the_list_order():
     )
     session = ZmartController(piezo_first, {})
 
-    answer = session.get_xyz()["content"]
+    answer = session.get_xyz()["output"]
 
-    assert answer["z"]["actuator"] == "piezo"
-    assert session._handle.asked == [{"x": "motoric", "y": "motoric", "z": "piezo"}]
+    assert answer["z"]["used_actuator"] == "piezo"
+    assert session.plugin.asked == [{"x": "motoric", "y": "motoric", "z": "piezo"}]
 
 
 @pytest.mark.parametrize("command", ["get_xyz", "set_xyz"])
@@ -105,22 +95,22 @@ def test_get_and_set_use_the_same_default_and_say_which_motor(command):
 
     answer = call() if command == "get_xyz" else call(1.0, 2.0, 0.0)
 
-    assert {axis: reading["actuator"] for axis, reading in answer["content"].items()} == {
+    assert {axis: reading["used_actuator"] for axis, reading in answer["output"].items()} == {
         "x": "motoric",
         "y": "motoric",
         "z": "motoric",
     }
-    assert session._handle.asked == [{"x": "motoric", "y": "motoric", "z": "motoric"}]
+    assert session.plugin.asked == [{"x": "motoric", "y": "motoric", "z": "motoric"}]
 
 
 def test_a_chosen_motor_replaces_the_default_for_that_axis_only():
     session = ZmartController(Scope, {})
 
-    answer = session.set_xyz(0.0, 0.0, 5.0, with_actuators={"z": "piezo"})["content"]
+    answer = session.set_xyz(0.0, 0.0, 5.0, with_actuators={"z": "piezo"})["output"]
 
-    assert answer["z"]["actuator"] == "piezo"
-    assert answer["x"]["actuator"] == "motoric"
-    assert session._handle.asked == [{"x": "motoric", "y": "motoric", "z": "piezo"}]
+    assert answer["z"]["used_actuator"] == "piezo"
+    assert answer["x"]["used_actuator"] == "motoric"
+    assert session.plugin.asked == [{"x": "motoric", "y": "motoric", "z": "piezo"}]
 
 
 @pytest.mark.parametrize(
@@ -136,23 +126,19 @@ def test_an_unknown_motor_is_refused_before_the_driver_is_asked(chosen, says):
     answer = session.set_xyz(0.0, 0.0, 0.0, with_actuators=chosen)
 
     assert answer["success"] is False
-    assert says in answer["content"]
-    assert session._handle.asked == []
-
-
-# ---- get_info: the description and what is set up
+    assert says in answer["output"]
+    assert session.plugin.asked == []
 
 
 def test_get_info_answers_the_description_and_the_setup():
-    content = ZmartController(Scope, {}).get_info()["content"]
+    content = ZmartController(Scope, {}).get_info()["output"]
 
     assert content == {
         "description": "A scope in memory. +z points up.",
         "setup": {"saving": {"done": True, "says": "OME-TIFF under D:/data"}},
+        "chooses_its_own_folder": False,
+        "connection_status": {},
     }
-
-
-# ---- the validator
 
 
 def test_a_scope_that_names_every_default_fits():
