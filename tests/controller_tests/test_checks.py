@@ -162,11 +162,7 @@ def test_the_mocks_acquisition_fits(mock):
 def test_files_names_everything_the_acquisition_saved(mock):
     output = acquire_on_the_mock(mock, z_planes=2)["output"]
     names = [Path(path).name for path in output["files"]]
-    assert names == [
-        "acquisition_A1_z000.ome.tif",
-        "acquisition_A1_z001.ome.tif",
-        "acquisition_A1.commands.json",
-    ]
+    assert names == ["acquisition_A1.ome.tif", "acquisition_A1.commands.json"]
 
 
 def test_an_ome_zarr_folder_counts_as_a_saved_file(mock):

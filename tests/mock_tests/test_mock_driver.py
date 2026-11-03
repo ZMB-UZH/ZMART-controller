@@ -286,20 +286,55 @@ class TestDataHandling:
         failed = mic.set_state({"changeable": {"z_planes": 0}})
         assert failed["success"] is False and "z_planes" in failed["output"]
 
-    def test_a_z_stack_is_one_file_per_plane(self, mic):
+    def test_a_z_stack_is_one_file_holding_every_plane(self, mic):
         answer = mic.acquire(position_label="cell 1", acquisition_settings=_full_stack(mic, 3))[
             "output"
         ]
         names = [Path(f).name for f in answer["files"]]
-        assert names == [
-            "acquisition_cell_1_z000.ome.tif",
-            "acquisition_cell_1_z001.ome.tif",
-            "acquisition_cell_1_z002.ome.tif",
-            "acquisition_cell_1.commands.json",
-        ]
-        description = _tiff_description(Path(answer["files"][1]))
+        assert names == ["acquisition_cell_1.ome.tif", "acquisition_cell_1.commands.json"]
+        description = _tiff_description(Path(answer["files"][0]))
         assert 'PhysicalSizeX="1.0"' in description
-        assert 'PositionZ="1.0"' in description
+        assert 'SizeZ="3"' in description
+        assert 'Namespace="zmart/position"' in description
+
+    def test_an_ome_tiff_is_placed_as_the_same_ome_zarr_would_be(self, mock, tmp_path):
+        placed = {}
+        for format in ("ome-tiff", "ome-zarr"):
+            session = _open(mock, tmp_path / format, mock_timing="instant", format=format)
+            try:
+                session.set_xyz(100, 50, 3)
+                answer = session.acquire(
+                    position_label="P", acquisition_settings=_full_stack(session, 2, 0.5)
+                )["output"]
+            finally:
+                session.disconnect()
+            saved = Path(answer["files"][0])
+            if format == "ome-zarr":
+                multiscale = json.loads((saved / "zarr.json").read_text())["attributes"]["ome"][
+                    "multiscales"
+                ][0]
+            else:
+                note = _tiff_description(saved).split('<M K="multiscales">')[1].split("</M>")[0]
+                multiscale = json.loads(
+                    note.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
+                )[0]
+            scale, translation = (
+                t[t["type"]] for t in multiscale["datasets"][0]["coordinateTransformations"]
+            )
+            placed[format] = (scale[-3:], translation[-3:])
+        assert placed["ome-tiff"] == placed["ome-zarr"]
+
+    def test_the_stack_opens_as_one_ome_tiff_in_other_programs(self, mic):
+        tifffile = pytest.importorskip("tifffile")
+        answer = mic.acquire(position_label="cell 3", acquisition_settings=_full_stack(mic, 3))[
+            "output"
+        ]
+        with tifffile.TiffFile(answer["files"][0]) as tif:
+            assert tif.is_ome
+            series = tif.series[0]
+            assert series.axes == "ZYX" and series.shape[0] == 3
+            stack = series.asarray()
+        assert len({stack[z].tobytes() for z in range(3)}) == 3
 
     def test_each_plane_says_which_file_channel_depth_and_place_it_is(self, mic):
         mic.set_xyz(100, 50, 3)
@@ -309,7 +344,7 @@ class TestDataHandling:
         )["output"]
         assert answer["planes"] == [
             {
-                "path": answer["files"][index],
+                "path": answer["files"][0],
                 "c": 0,
                 "z": index,
                 "t": 0,
