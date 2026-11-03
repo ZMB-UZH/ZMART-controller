@@ -93,6 +93,7 @@ mic.connect(driver, connection=None)
   - `driver`: a name from `get_instruments`
   - `connection`: optional; a dictionary that is passed to the driver as it is. Default: the `connection` from the driver's `zmart_controller_plugin.json`.
 - **Output:** nothing. After this call, every command below goes to that microscope.
+- **Note:** The connection may say how this session's images are saved, with `"format"`: `"ome-tiff"`, one OME-TIFF file per position that opens directly in Fiji, napari or QuPath, or `"ome-zarr"`, one OME-Zarr image per position. A driver that writes its images itself saves them that way, and both formats are placed on the sample by the same OME-Zarr rules. A driver that keeps the microscope software's own files leaves them as they are; the ZMART interface then turns them into positions in the chosen format.
 
 <br>
 
